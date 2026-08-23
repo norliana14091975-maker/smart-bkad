@@ -81,3 +81,38 @@ model VisitorCounter {
 
   @@map("visitor_counter")
 }
+
+// Akun admin dashboard
+model AdminUser {
+  id           String         @id @default(cuid())
+  username     String         @unique
+  passwordHash String         @map("password_hash")
+  createdAt    DateTime       @default(now())
+  sessions     AdminSession[]
+
+  @@map("admin_user")
+}
+
+// Sesi login admin (cookie httpOnly menyimpan id sesi)
+model AdminSession {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  user      AdminUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime  @map("expires_at")
+  createdAt DateTime  @default(now())
+
+  @@map("admin_session")
+}
+
+// Riwayat import LRA dari PDF
+model ImportLog {
+  id        Int      @id @default(autoincrement())
+  filename  String
+  pages     Int      @default(0)
+  records   Int      @default(0)
+  status    String   @default("parsed") // parsed | confirmed | failed
+  message   String?
+  createdAt DateTime @default(now())
+
+  @@map("import_log")
+}

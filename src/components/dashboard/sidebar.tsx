@@ -1,13 +1,16 @@
 'use client'
 
 import { useState } from 'react'
-import Link from 'next/link'
 import {
   BarChart3,
   ChevronDown,
   Eye,
   LayoutDashboard,
+  LogIn,
+  LogOut,
   Minus,
+  Settings2,
+  ShieldCheck,
   Table2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -22,6 +25,12 @@ export type SectionId =
   | 'realisasi-skpd'
   | 'transparansi-apbd'
   | 'transparansi-realisasi'
+  | 'admin-overview'
+  | 'admin-apbd'
+  | 'admin-budget'
+  | 'admin-realisasi'
+  | 'admin-import'
+  | 'admin-transparansi'
 
 interface NavChild {
   id: SectionId
@@ -67,17 +76,41 @@ const NAV: NavGroup[] = [
   },
 ]
 
+const ADMIN_NAV: NavGroup = {
+  id: 'admin',
+  label: 'Admin',
+  icon: ShieldCheck,
+  children: [
+    { id: 'admin-overview', label: 'Ringkasan Admin' },
+    { id: 'admin-apbd', label: 'Data APBD' },
+    { id: 'admin-budget', label: 'Item Anggaran' },
+    { id: 'admin-realisasi', label: 'Data Realisasi' },
+    { id: 'admin-import', label: 'Import LRA (PDF)' },
+    { id: 'admin-transparansi', label: 'Dokumen Transparansi' },
+  ],
+}
+
 interface SidebarNavProps {
   active: SectionId
   onSelect: (id: SectionId) => void
   className?: string
+  /** username admin jika sudah login; null jika belum */
+  admin: string | null
+  onLoginClick: () => void
+  onLogout: () => void
 }
 
-export function SidebarNav({ active, onSelect, className }: SidebarNavProps) {
+export function SidebarNav({ active, onSelect, className, admin, onLoginClick, onLogout }: SidebarNavProps) {
   // grup yang berisi item aktif terbuka secara default
   const [open, setOpen] = useState<Record<string, boolean>>(() => {
-    const initial: Record<string, boolean> = { anggaran: true, realisasi: false, transparansi: false }
-    for (const g of NAV) {
+    const initial: Record<string, boolean> = {
+      anggaran: true,
+      realisasi: false,
+      transparansi: false,
+      admin: false,
+    }
+    const all = [NAV, ADMIN_NAV].flat()
+    for (const g of all) {
       if (g.children.some((c) => c.id === active)) initial[g.id] = true
     }
     return initial
@@ -85,15 +118,60 @@ export function SidebarNav({ active, onSelect, className }: SidebarNavProps) {
 
   const toggle = (id: string) => setOpen((prev) => ({ ...prev, [id]: !prev[id] }))
 
+  const renderGroup = (group: NavGroup) => {
+    const isOpen = open[group.id]
+    const groupActive = group.children.some((c) => c.id === active)
+    const Icon = group.icon
+    return (
+      <li key={group.id}>
+        <button
+          type="button"
+          onClick={() => toggle(group.id)}
+          aria-expanded={isOpen}
+          className={cn(
+            'flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-semibold transition-colors hover:bg-white/10',
+            groupActive && 'text-white'
+          )}
+        >
+          <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <span className="flex-1 text-left">{group.label}</span>
+          <ChevronDown
+            className={cn('h-4 w-4 shrink-0 transition-transform', isOpen && 'rotate-180')}
+            aria-hidden="true"
+          />
+        </button>
+        {isOpen && (
+          <ul className="mt-1 space-y-0.5 pl-4" role="menu">
+            {group.children.map((child) => (
+              <li key={child.id} role="none">
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => onSelect(child.id)}
+                  className={cn(
+                    'flex w-full items-center gap-3 rounded-md px-3 py-1.5 text-[13px] transition-colors hover:bg-white/10',
+                    active === child.id
+                      ? 'bg-white/15 font-semibold text-white'
+                      : 'text-slate-300'
+                  )}
+                >
+                  <Minus className="h-3 w-3 shrink-0 opacity-60" aria-hidden="true" />
+                  <span className="text-left">{child.label}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </li>
+    )
+  }
+
   return (
     <div className={cn('flex h-full flex-col bg-[#1b2a4a] text-slate-200', className)}>
       {/* Brand */}
       <div className="flex items-center gap-2 border-b border-white/10 px-4 py-4">
         <DkiEmblem className="h-9 w-9 shrink-0" />
-        <span
-          className="text-base font-semibold tracking-[0.3em] text-white"
-          aria-label="Dashboard"
-        >
+        <span className="text-base font-semibold tracking-[0.3em] text-white" aria-label="Dashboard">
           DASHBOARD
         </span>
       </div>
@@ -115,63 +193,47 @@ export function SidebarNav({ active, onSelect, className }: SidebarNavProps) {
             </button>
           </li>
 
-          {NAV.map((group) => {
-            const isOpen = open[group.id]
-            const groupActive = group.children.some((c) => c.id === active)
-            const Icon = group.icon
-            return (
-              <li key={group.id}>
-                <button
-                  type="button"
-                  onClick={() => toggle(group.id)}
-                  aria-expanded={isOpen}
-                  className={cn(
-                    'flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-semibold transition-colors hover:bg-white/10',
-                    groupActive && 'text-white'
-                  )}
-                >
-                  <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-                  <span className="flex-1 text-left">{group.label}</span>
-                  <ChevronDown
-                    className={cn(
-                      'h-4 w-4 shrink-0 transition-transform',
-                      isOpen && 'rotate-180'
-                    )}
-                    aria-hidden="true"
-                  />
-                </button>
-                {isOpen && (
-                  <ul className="mt-1 space-y-0.5 pl-4" role="menu">
-                    {group.children.map((child) => (
-                      <li key={child.id} role="none">
-                        <button
-                          type="button"
-                          role="menuitem"
-                          onClick={() => onSelect(child.id)}
-                          className={cn(
-                            'flex w-full items-center gap-3 rounded-md px-3 py-1.5 text-[13px] transition-colors hover:bg-white/10',
-                            active === child.id
-                              ? 'bg-white/15 font-semibold text-white'
-                              : 'text-slate-300'
-                          )}
-                        >
-                          <Minus className="h-3 w-3 shrink-0 opacity-60" aria-hidden="true" />
-                          <span className="text-left">{child.label}</span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+          {NAV.map(renderGroup)}
+
+          {admin && (
+            <>
+              <li className="pt-3">
+                <p className="flex items-center gap-2 px-3 pb-1 text-[10px] font-bold uppercase tracking-[0.2em] text-amber-400/90">
+                  <Settings2 className="h-3 w-3" aria-hidden="true" />
+                  Area Admin — {admin}
+                </p>
               </li>
-            )
-          })}
+              {renderGroup(ADMIN_NAV)}
+            </>
+          )}
         </ul>
       </nav>
 
       {/* Footer sidebar */}
-      <div className="border-t border-white/10 px-4 py-3 text-[11px] text-slate-400">
-        <p>Dashboard Keuangan DKI</p>
-        <p className="mt-0.5">Pemerintah Provinsi DKI Jakarta</p>
+      <div className="border-t border-white/10 px-4 py-3">
+        {admin ? (
+          <button
+            type="button"
+            onClick={onLogout}
+            className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm font-semibold text-slate-200 transition-colors hover:bg-white/10"
+          >
+            <LogOut className="h-4 w-4 shrink-0" aria-hidden="true" />
+            Keluar ({admin})
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onLoginClick}
+            className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm font-semibold text-slate-200 transition-colors hover:bg-white/10"
+          >
+            <LogIn className="h-4 w-4 shrink-0" aria-hidden="true" />
+            Login Admin
+          </button>
+        )}
+        <p className="mt-2 text-[11px] text-slate-400">
+          Dashboard Keuangan DKI
+          <span className="block">Pemerintah Provinsi DKI Jakarta</span>
+        </p>
       </div>
     </div>
   )

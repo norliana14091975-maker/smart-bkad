@@ -42,3 +42,60 @@ Work Log:
 
 Stage Summary:
 - Error hidrasi ekstensi Grammarly pada <body> diredam via suppressHydrationWarning; risiko mismatch tanggal server/klien dihilangkan secara struktural dengan hook useToday berbasis useSyncExternalStore + helper format zona-waktu-aman
+
+---
+Task ID: 3 (spec)
+Agent: Z.ai Code (main)
+Task: Kontrak API backend untuk fitur admin + import LRA (spesifikasi untuk Task ID 3-a)
+
+Work Log:
+- Frontend admin selesai: login dialog, sidebar dengan grup ADMIN (6 menu), section overview/apbd/budget/realisasi/import/transparansi
+- Prisma sudah punya model AdminUser, AdminSession, ImportLog; DB sudah di-push & di-seed (admin/admin123)
+- pdf-parse sudah terinstall + deklarasi tipe di src/types/pdf-parse.d.ts
+
+Stage Summary: KONTRAK API YANG WAJIB DIIKUMENTASIKAN EXACTLY (semua respons JSON { data: ... } saat sukses, { error: string } saat gagal):
+
+AUTH:
+- POST /api/auth/login  body {username, password} → 200 {data:{username}} + Set-Cookie httpOnly `bpkd_admin_session` (7 hari); 401 {error:'Username atau password salah'}
+- POST /api/auth/logout → 200 {data:{ok:true}} (hapus sesi + clear cookie)
+- GET /api/auth/me → 200 {data:{username}} atau 401 {error:'Belum login'}
+- Verifikasi password: hash scrypt format "salt:hash" (hex, keylen 64) — lihat prisma/seed.ts hashPassword()
+
+ADMIN (semua butuh sesi valid; tanpa sesi → 401 {error:'Tidak diizinkan. Silakan login.'}):
+- GET /api/admin/overview → {data:{counts:{apbdYears,budgetItems,realisasiAkun,realisasiSkpd,transparansiDocs,importLogs}, visitorThisMonth, recentImports:[ImportLogDto terbaru 10, createdAt ISO string]}}
+- GET /api/admin/apbd → {data:[ApbdSummaryDto]} (bentuk sama dengan /api/apbd: year,pendapatan{apbd,apbdp},belanja{...},penerimaanPembiayaan{...},pengeluaranPembiayaan{...}) urut year desc
+- POST /api/admin/apbd body bentuk ApbdSummaryDto → upsert by year → {data:ApbdSummaryDto}
+- DELETE /api/admin/apbd?year=2024 → {data:{ok:true}}
+- GET /api/admin/budget-items?section=&tab=&year= → {data:[{id,section,tab,code,name,year,amount}]} (year boleh 'semua' → tanpa filter) urut code asc
+- POST /api/admin/budget-items body {section,tab,code,name,year,amount} → {data:{id,...}}
+- PUT /api/admin/budget-items body {id,section,tab,code,name,year,amount} → {data:{...}}
+- DELETE /api/admin/budget-items?id=1 → {data:{ok:true}}
+- GET /api/admin/realisasi-akun → {data:[{id,code,name,group,anggaran,realisasi}]} urut code asc
+- PUT /api/admin/realisasi-akun body {id,anggaran,realisasi} → {data:{...}}
+- DELETE /api/admin/realisasi-akun?id=1 ATAU ?all=1 → {data:{ok:true}}
+- GET /api/admin/realisasi-skpd → {data:[{id,name,pendapatan{anggaran,realisasi},belanja{...},pembiayaan{...}}]} urut name asc
+- PUT /api/admin/realisasi-skpd body {id,pendapatan{anggaran,realisasi},belanja{...},pembiayaan{...}} → {data:{...}}
+- DELETE /api/admin/realisasi-skpd?id=1 ATAU ?all=1 → {data:{ok:true}}
+- GET /api/admin/transparansi?type=APBD|Realisasi → {data:[{id,type,title,url}]} urut id asc
+- POST /api/admin/transparansi body {type,title,url} → {data:{id,...}}
+- DELETE /api/admin/transparansi?id=1 → {data:{ok:true}}
+- POST /api/admin/import/lra (multipart field 'file', PDF ≤10MB, cek magic bytes %PDF) → {data:{importLogId, filename, pages, items:[{code,name,anggaran,realisasi,pct}], textPreview(≤500 char)}}; error 400 {error} jika bukan PDF/terlalu besar/tanpa teks (hasil scan); ekstraksi: pdf-parse → chunk teks ±15000 char → per chunk panggil z-ai-web-dev-sdk chat completions (lihat skills/LLM/SKILL.md, `const zai = await ZAI.create()`, messages + thinking disabled) minta HANYA array JSON [{"code","name","anggaran","realisasi"}] (angka format Indonesia→plain), parse dengan buang code fence, gabung & dedupe by code; pct=anggaran>0?realisasi/anggaran*100:0; simpan ImportLog status 'parsed'
+- POST /api/admin/import/confirm body {importLogId, items(sama bentuk), mode:'replace'|'append'} → {data:{saved:N}}; replace = deleteMany realisasi_akun lalu insert semua; append = upsert by code; group ditentukan prefix kode ('4'→PENDAPATAN,'5'→BELANJA,'6'→PEMBIAYAAN); update ImportLog status 'confirmed' records=N
+- GET /api/admin/import/logs → {data:[ImportLogDto]} urut terbaru
+
+---
+Task ID: 3-b
+Agent: Z.ai Code (main)
+Task: Integrasi frontend admin, perbaikan worker pdf-parse, verifikasi end-to-end penuh
+
+Work Log:
+- Frontend admin (build sendiri, frontend-first): LoginDialog, AdminGuard, sidebar grup ADMIN (6 menu) + tombol Login/Keluar, 6 section admin (overview stat cards + riwayat, APBD CRUD dialog, Item Anggaran dengan filter section/tab/tahun + CRUD, Data Realisasi tabs Akun/SKPD dengan edit/hapus/hapus-semua, Import LRA dengan dropzone + preview + radio mode + konfirmasi + riwayat, Transparansi CRUD), integrasi page.tsx (state admin + cek sesi on-mount), CSS scrollbar kustom .nice-scrollbar
+- Backend dibuat full-stack-developer (Task 3-a) sesuai kontrak: src/lib/auth.ts + 13 route auth/admin/import; semua lulus lint
+- Perbaikan bug integrasi pdf-parse v2 di Turbopack: worker pdfjs gagal resolve ('.next/dev/server/chunks/pdf.worker.mjs') → tambahkan PDFParse.setWorker(path absolut node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs) di route import; hapus d.ts usang
+- Perbaikan bug hydration (div dalam p): admin-overview-section — <p> berisi <Skeleton> (div) diganti <div>
+- Uji curl end-to-end: login ok/salah, cookie sesi, overview counts, APBD upsert+delete, budget-items list, import PDF test (pdf-lib generate /tmp/test-lra.pdf 9 baris) → ekstraksi LLM 9/9 baris akurat (format angka Indonesia diparse benar, pct benar), confirm append (saved 9), API publik memuat data baru, logout invalidasi sesi
+- Verifikasi browser penuh: login dialog → auto-navigasi Ringkasan Admin, semua 6 section admin berfungsi, upload PDF via UI → "Ekstraksi berhasil — 9 baris terdeteksi" → Konfirmasi Import → status Tersimpan, data tampil di dashboard publik, logout kembali ke publik, sesi bertahan reload, mobile drawer + tombol login admin OK, tanpa error console/hidrasi
+- Data di-reseed untuk kondisi bersih; scripts/make-test-lra.ts disimpan sebagai utilitas uji
+
+Stage Summary:
+- Fitur lengkap: login admin (admin/admin123, sesi cookie httpOnly 7 hari, scrypt), dashboard admin 6 modul pengelolaan data, import LRA dari PDF (pdf-parse + LLM chunked, replace/append) terverifikasi end-to-end; lint bersih; tanpa error runtime

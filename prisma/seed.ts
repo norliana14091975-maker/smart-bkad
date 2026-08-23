@@ -1,6 +1,14 @@
 import { PrismaClient } from '@prisma/client'
+import crypto from 'crypto'
 
 const db = new PrismaClient()
+
+/** Hash password dengan scrypt: "salt:hash" (hex). */
+export function hashPassword(password: string): string {
+  const salt = crypto.randomBytes(16).toString('hex')
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex')
+  return `${salt}:${hash}`
+}
 
 // ---------------------------------------------------------------------------
 // Data anggaran publik APBD Provinsi DKI Jakarta (dalam Rupiah)
@@ -331,7 +339,14 @@ async function main() {
     create: { month, count: 0 },
   })
 
-  console.log('Seed selesai.')
+  // akun admin default (username: admin, password: admin123)
+  await db.adminUser.upsert({
+    where: { username: 'admin' },
+    update: {},
+    create: { username: 'admin', passwordHash: hashPassword('admin123') },
+  })
+
+  console.log('Seed selesai. Login admin: admin / admin123')
 }
 
 main()
