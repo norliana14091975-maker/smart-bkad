@@ -1,0 +1,83 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Ringkasan APBD per tahun (grid 2x2 pada halaman APBD)
+model ApbdSummary {
+  year             Int   @id
+  pendapatanApbd   Float @map("pendapatan_apbd")
+  pendapatanApbdp  Float @map("pendapatan_apbdp")
+  belanjaApbd      Float @map("belanja_apbd")
+  belanjaApbdp     Float @map("belanja_apbdp")
+  terimaApbd       Float @map("terima_apbd")
+  terimaApbdp      Float @map("terima_apbdp")
+  keluarApbd       Float @map("keluar_apbd")
+  keluarApbdp      Float @map("keluar_apbdp")
+
+  @@map("apbd_summary")
+}
+
+// Item anggaran: section (pendapatan|belanja|pembiayaan), tab, kode akun, tahun
+model BudgetItem {
+  id      Int    @id @default(autoincrement())
+  section String
+  tab     String
+  code    String
+  name    String
+  year    Int
+  amount  Float
+
+  @@unique([section, tab, code, year])
+  @@map("budget_item")
+}
+
+// Realisasi anggaran per akun (tahun berjalan)
+model RealisasiAkun {
+  id        Int    @id @default(autoincrement())
+  code      String @unique
+  name      String
+  group     String
+  anggaran  Float
+  realisasi Float
+
+  @@map("realisasi_akun")
+}
+
+// Realisasi anggaran per SKPD (tahun berjalan)
+model RealisasiSkpd {
+  id                  Int    @id @default(autoincrement())
+  name                String @unique
+  pendapatanAnggaran  Float  @map("pendapatan_anggaran")
+  pendapatanRealisasi Float  @map("pendapatan_realisasi")
+  belanjaAnggaran     Float  @map("belanja_anggaran")
+  belanjaRealisasi    Float  @map("belanja_realisasi")
+  pembiayaanAnggaran  Float  @map("pembiayaan_anggaran")
+  pembiayaanRealisasi Float  @map("pembiayaan_realisasi")
+
+  @@map("realisasi_skpd")
+}
+
+// Dokumen transparansi anggaran
+model TransparansiDoc {
+  id    Int    @id @default(autoincrement())
+  type  String
+  title String
+  url   String
+
+  @@unique([type, title])
+  @@map("transparansi_doc")
+}
+
+// Penghitung pengunjung bulanan
+model VisitorCounter {
+  id    Int    @id @default(autoincrement())
+  month String @unique
+  count Int    @default(0)
+
+  @@map("visitor_counter")
+}
