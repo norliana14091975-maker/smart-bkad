@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { getAdminUser, unauthorized } from '@/lib/auth'
+import { requireAdmin, unauthorized } from '@/lib/auth'
 import type { RealisasiSkpdRowDto } from '@/types/budget'
 
 type SkpdRow = {
@@ -38,7 +38,7 @@ function validatePair(value: unknown, label: string): string | null {
 
 export async function GET() {
   try {
-    const user = await getAdminUser()
+    const user = await requireAdmin()
     if (!user) return unauthorized()
 
     const rows = await db.realisasiSkpd.findMany({ orderBy: { name: 'asc' } })
@@ -51,7 +51,7 @@ export async function GET() {
 
 export async function PUT(req: Request) {
   try {
-    const user = await getAdminUser()
+    const user = await requireAdmin()
     if (!user) return unauthorized()
 
     const body = (await req.json().catch(() => null)) as Record<string, unknown> | null
@@ -102,7 +102,7 @@ export async function PUT(req: Request) {
 
 export async function DELETE(req: Request) {
   try {
-    const user = await getAdminUser()
+    const user = await requireAdmin()
     if (!user) return unauthorized()
 
     const { searchParams } = new URL(req.url)

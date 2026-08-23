@@ -3,7 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import ZAI from 'z-ai-web-dev-sdk'
 import { db } from '@/lib/db'
-import { getAdminUser, unauthorized } from '@/lib/auth'
+import { requireAdmin, unauthorized } from '@/lib/auth'
 import type { ImportItemDto } from '@/types/budget'
 
 // Pastikan handler berjalan di runtime Node (pdf-parse butuh API Node)
@@ -185,7 +185,7 @@ function buildChunkPrompt(chunk: string): string {
 
 export async function POST(req: Request) {
   try {
-    const user = await getAdminUser()
+    const user = await requireAdmin()
     if (!user) return unauthorized()
 
     // --- Baca & validasi file ---

@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { getAdminUser, unauthorized } from '@/lib/auth'
+import { requireAdmin, unauthorized } from '@/lib/auth'
 import { removeUploadedImage } from '@/lib/image-upload'
 import { DEFAULT_SETTINGS } from '@/lib/default-settings'
 
 /** Kembalikan seluruh pengaturan ke nilai bawaan (termasuk logo & favicon). */
 export async function POST() {
   try {
-    const user = await getAdminUser()
+    const user = await requireAdmin()
     if (!user) return unauthorized()
 
     await db.appSetting.deleteMany({})

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { getAdminUser, unauthorized } from '@/lib/auth'
+import { requireAdmin, unauthorized } from '@/lib/auth'
 
 /**
  * Tentukan kelompok rekening dari awalan kode:
@@ -84,7 +84,7 @@ function normalizeItem(entry: unknown): NormalizedItem | null {
 
 export async function POST(req: Request) {
   try {
-    const user = await getAdminUser()
+    const user = await requireAdmin()
     if (!user) return unauthorized()
 
     const body = (await req.json().catch(() => null)) as

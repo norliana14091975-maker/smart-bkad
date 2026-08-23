@@ -23,15 +23,32 @@ export async function POST(req: Request) {
       )
     }
 
-    const user = await db.adminUser.findUnique({ where: { username } })
+    const user = await db.adminUser.findUnique({
+      where: { username },
+      include: { opd: true },
+    })
     if (!user || !verifyPassword(password, user.passwordHash)) {
       return NextResponse.json({ error: 'Username atau password salah' }, { status: 401 })
+    }
+
+    // Akun OPD dinonaktifkan admin → tolak login
+    if (user.role === 'opd' && user.opd && !user.opd.active) {
+      return NextResponse.json(
+        { error: 'Akun OPD ini dinonaktifkan. Hubungi admin.' },
+        { status: 403 },
+      )
     }
 
     // Buat sesi baru (id UUID, berlaku 7 hari) dan pasang cookie httpOnly
     const session = await createSession(user.id)
 
-    const res = NextResponse.json({ data: { username: user.username } })
+    const res = NextResponse.json({
+      data: {
+        username: user.username,
+        role: user.role === 'opd' ? ('opd' as const) : ('admin' as const),
+        opdName: user.opd?.name ?? null,
+      },
+    })
     res.cookies.set(SESSION_COOKIE, session.id, {
       httpOnly: true,
       sameSite: 'lax',

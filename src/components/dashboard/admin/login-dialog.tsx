@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { KeyRound, Loader2, ShieldCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import type { AuthUserDto } from '@/types/budget'
 import {
   Dialog,
   DialogContent,
@@ -16,7 +17,7 @@ import { Label } from '@/components/ui/label'
 interface LoginDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSuccess: (username: string) => void
+  onSuccess: (user: AuthUserDto) => void
 }
 
 export function LoginDialog({ open, onOpenChange, onSuccess }: LoginDialogProps) {
@@ -36,14 +37,14 @@ export function LoginDialog({ open, onOpenChange, onSuccess }: LoginDialogProps)
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
       })
-      const json = (await res.json()) as { data?: { username: string }; error?: string }
+      const json = (await res.json()) as { data?: AuthUserDto; error?: string }
       if (!res.ok || !json.data) {
         setError(json.error ?? 'Login gagal')
         return
       }
       setUsername('')
       setPassword('')
-      onSuccess(json.data.username)
+      onSuccess(json.data)
     } catch {
       setError('Terjadi kesalahan jaringan. Coba lagi.')
     } finally {

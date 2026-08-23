@@ -118,3 +118,21 @@ Work Log:
 
 Stage Summary:
 - Fitur Pengaturan Aplikasi lengkap: nama aplikasi, judul halaman (tab browser), deskripsi SEO, teks & sub-teks brand header, footer, logo (unggah/hapus), favicon (unggah/hapus), reset semua — tersimpan di DB, live update tanpa reload, favicon/title juga dirender server-side via generateMetadata; dev server berjalan persisten
+
+---
+Task ID: 5
+Agent: Z.ai Code (main)
+Task: Input Data OPD/SKPD dengan pembuatan user management otomatis untuk login OPD
+
+Work Log:
+- Prisma: model Opd (code unik, name unik, active) + AdminUser ditambah role ('admin'|'opd') & opdId (relasi 1-1 cascade) → db:push + restart server (teknik orphan process)
+- Auth: payload getAdminUser kini memuat role/opdId/opdName; helper baru requireAdmin(); seluruh 13 route admin diganti guard requireAdmin sehingga akun OPD tidak bisa mengakses API admin; login menolak OPD nonaktif (403); /api/auth/login & /api/auth/me mengembalikan {username, role, opdName}
+- Lib: src/lib/password.ts (hashPassword scrypt dipakai seed + opd), src/lib/opd.ts (slugifyUsername, generateUniqueUsername, generatePassword 'Opd-xxxxxxxxxx', createOpdWithUser transaksional, resetOpdPassword + hapus sesi)
+- API admin: GET/POST/PUT/DELETE /api/admin/opd (POST = buat OPD + akun otomatis, kredensial dikembalikan sekali; PUT memperbarui nama di RealisasiSkpd agar tautan data tetap; DELETE cascade user+sesi), POST /api/admin/opd/reset-password, POST /api/admin/opd/toggle (nonaktif = hapus semua sesi + tolak login)
+- API OPD: GET /api/opd/me (profil + realisasi SKPD dicocokkan per nama), PUT /api/opd/realisasi (upsert RealisasiSkpd milik OPD — hanya angka ≥ 0)
+- Frontend: section admin-opd (tabel OPD + aksi ubah/reset/toggle/hapus, dialog tambah OPD, dialog kredensial dengan tombol salin + peringatan tampil sekali), section opd-dashboard (4 kartu profil + editor realisasi 3 kelompok dengan % capaian), sidebar (prop user AuthUserDto, grup Area OPD untuk role opd, Area Admin untuk admin), login dialog onSuccess object + routing per role, AdminGuard cek role admin, page.tsx integrasi penuh
+- Uji curl: buat OPD → akun dinas-kesehatan/Opd-nQJLWkhxdQ; login OPD ok; OPD akses API admin → 401; admin akses /api/opd/me → 401; update realisasi via OPD tampil di API publik; toggle nonaktif → sesi mati + login 403; reset password → login dengan password baru ok
+- Uji browser: admin buat OPD DINAS PENDIDIKAN via UI → dialog kredensial tampil; logout → login OPD → langsung ke Dashboard OPD dengan profil OPD-002; isi realisasi → tersimpan & muncul di API publik; kembali ke admin → nonaktifkan (badge Nonaktif) → hapus (OPD + akun hilang, data realisasi tetap); tanpa error console; lint bersih
+
+Stage Summary:
+- Fitur lengkap: admin input OPD/SKPD → akun login dibuat otomatis (username slug dari nama, password acak ditampilkan sekali dengan tombol salin); manajemen akun (reset password, aktif/nonaktif dengan logout paksa, hapus); OPD login ke dashboard sendiri (profil + editor realisasi anggaran/realisasi yang langsung tampil di dashboard publik Per-SKPD); isolasi role ketat dua arah

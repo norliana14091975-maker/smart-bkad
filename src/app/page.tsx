@@ -19,10 +19,13 @@ import { AdminRealisasiSection } from '@/components/dashboard/sections/admin-rea
 import { AdminImportSection } from '@/components/dashboard/sections/admin-import-section'
 import { AdminTransparansiSection } from '@/components/dashboard/sections/admin-transparansi-section'
 import { AdminSettingsSection } from '@/components/dashboard/sections/admin-settings-section'
+import { AdminOpdSection } from '@/components/dashboard/sections/admin-opd-section'
+import { OpdDashboardSection } from '@/components/dashboard/sections/opd-dashboard-section'
 import { LoginDialog } from '@/components/dashboard/admin/login-dialog'
 import { AdminGuard } from '@/components/dashboard/admin/admin-guard'
 import { useSettings } from '@/hooks/use-settings'
 import { DEFAULT_SETTINGS } from '@/lib/default-settings'
+import type { AuthUserDto } from '@/types/budget'
 
 const SECTION_META: Record<
   SectionId,
@@ -43,6 +46,8 @@ const SECTION_META: Record<
   'admin-import': { title: 'Import LRA dari PDF', breadcrumbHome: 'Admin', breadcrumbCurrent: 'Import LRA' },
   'admin-transparansi': { title: 'Kelola Dokumen Transparansi', breadcrumbHome: 'Admin', breadcrumbCurrent: 'Transparansi' },
   'admin-settings': { title: 'Pengaturan Aplikasi', breadcrumbHome: 'Admin', breadcrumbCurrent: 'Pengaturan' },
+  'admin-opd': { title: 'Kelola Data OPD/SKPD', breadcrumbHome: 'Admin', breadcrumbCurrent: 'Data OPD' },
+  'opd-dashboard': { title: 'Dashboard OPD', breadcrumbHome: 'OPD', breadcrumbCurrent: 'Dashboard OPD' },
 }
 
 const ADMIN_SECTIONS: SectionId[] = [
@@ -53,12 +58,15 @@ const ADMIN_SECTIONS: SectionId[] = [
   'admin-import',
   'admin-transparansi',
   'admin-settings',
+  'admin-opd',
 ]
+
+const OPD_SECTIONS: SectionId[] = ['opd-dashboard']
 
 export default function Home() {
   const [section, setSection] = useState<SectionId>('apbd')
   const [mobileOpen, setMobileOpen] = useState(false)
-  const [admin, setAdmin] = useState<string | null>(null)
+  const [user, setUser] = useState<AuthUserDto | null>(null)
   const [loginOpen, setLoginOpen] = useState(false)
 
   // Pengaturan aplikasi (nama, logo, favicon, teks) — gabung dengan bawaan
@@ -76,8 +84,8 @@ export default function Home() {
     fetch('/api/auth/me')
       .then((res) => (res.ok ? res.json() : null))
       .then((json) => {
-        const username = (json as { data?: { username: string } } | null)?.data?.username
-        if (!cancelled && username) setAdmin(username)
+        const data = (json as { data?: AuthUserDto } | null)?.data
+        if (!cancelled && data) setUser(data)
       })
       .catch(() => {})
     return () => {
@@ -114,10 +122,10 @@ export default function Home() {
     }
   }
 
-  const handleLoginSuccess = (username: string) => {
-    setAdmin(username)
+  const handleLoginSuccess = (u: AuthUserDto) => {
+    setUser(u)
     setLoginOpen(false)
-    handleSelect('admin-overview')
+    handleSelect(u.role === 'admin' ? 'admin-overview' : 'opd-dashboard')
   }
 
   const handleLogout = async () => {
@@ -126,11 +134,12 @@ export default function Home() {
     } catch {
       // abaikan kegagalan jaringan
     }
-    setAdmin(null)
+    setUser(null)
     handleSelect('apbd')
   }
 
-  const isAdminSection = ADMIN_SECTIONS.includes(section)
+  const isAdminSection = user?.role === 'admin' && ADMIN_SECTIONS.includes(section)
+  const isOpdSection = user?.role === 'opd' && OPD_SECTIONS.includes(section)
 
   return (
     <div className="flex min-h-screen flex-col bg-[#f4f6f8]">
@@ -141,7 +150,7 @@ export default function Home() {
             active={section}
             onSelect={handleSelect}
             className="h-full"
-            admin={admin}
+            user={user}
             settings={settings}
             onLoginClick={() => setLoginOpen(true)}
             onLogout={handleLogout}
@@ -156,7 +165,7 @@ export default function Home() {
               active={section}
               onSelect={handleSelect}
               className="h-full rounded-r-lg"
-              admin={admin}
+              user={user}
               settings={settings}
               onLoginClick={() => {
                 setMobileOpen(false)
@@ -188,7 +197,7 @@ export default function Home() {
             {section === 'transparansi-realisasi' && <TransparansiSection initialType="Realisasi" />}
 
             {isAdminSection && (
-              <AdminGuard admin={admin} onLoginClick={() => setLoginOpen(true)}>
+              <AdminGuard user={user} onLoginClick={() => setLoginOpen(true)}>
                 {section === 'admin-overview' && <AdminOverviewSection />}
                 {section === 'admin-apbd' && <AdminApbdSection />}
                 {section === 'admin-budget' && <AdminBudgetSection />}
@@ -196,8 +205,11 @@ export default function Home() {
                 {section === 'admin-import' && <AdminImportSection />}
                 {section === 'admin-transparansi' && <AdminTransparansiSection />}
                 {section === 'admin-settings' && <AdminSettingsSection />}
+                {section === 'admin-opd' && <AdminOpdSection />}
               </AdminGuard>
             )}
+
+            {isOpdSection && <OpdDashboardSection />}
           </main>
 
           <VisitorFooter settings={settings} />

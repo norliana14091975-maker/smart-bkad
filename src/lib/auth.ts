@@ -13,6 +13,9 @@ export const SESSION_MAX_AGE = 7 * 24 * 60 * 60
 export interface AdminUserPayload {
   id: string
   username: string
+  role: 'admin' | 'opd'
+  opdId: number | null
+  opdName: string | null
 }
 
 /**
@@ -43,7 +46,7 @@ export async function getAdminUser(): Promise<AdminUserPayload | null> {
 
     const session = await db.adminSession.findUnique({
       where: { id: sessionId },
-      include: { user: true },
+      include: { user: { include: { opd: true } } },
     })
     if (!session) return null
 
@@ -53,11 +56,27 @@ export async function getAdminUser(): Promise<AdminUserPayload | null> {
       return null
     }
 
-    return { id: session.user.id, username: session.user.username }
+    return {
+      id: session.user.id,
+      username: session.user.username,
+      role: session.user.role === 'opd' ? 'opd' : 'admin',
+      opdId: session.user.opd?.id ?? null,
+      opdName: session.user.opd?.name ?? null,
+    }
   } catch (error) {
     console.error('getAdminUser error', error)
     return null
   }
+}
+
+/**
+ * Guard khusus admin penuh: mengembalikan user hanya jika role 'admin'.
+ * Route admin memakai ini agar akun OPD tidak bisa mengakses API admin.
+ */
+export async function requireAdmin(): Promise<AdminUserPayload | null> {
+  const user = await getAdminUser()
+  if (!user || user.role !== 'admin') return null
+  return user
 }
 
 /**

@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { getAdminUser, unauthorized } from '@/lib/auth'
+import { requireAdmin, unauthorized } from '@/lib/auth'
 import type { ImportLogDto } from '@/types/budget'
 
 export async function GET() {
   try {
-    const user = await getAdminUser()
+    const user = await requireAdmin()
     if (!user) return unauthorized()
 
     const rows = await db.importLog.findMany({

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { getAdminUser, unauthorized } from '@/lib/auth'
+import { requireAdmin, unauthorized } from '@/lib/auth'
 import { MAX_IMAGE_SIZE, saveUploadedImage, removeUploadedImage } from '@/lib/image-upload'
 
 const BASE_NAME = 'app-favicon'
@@ -8,7 +8,7 @@ const BASE_NAME = 'app-favicon'
 /** Unggah favicon aplikasi (ikon tab browser). */
 export async function POST(req: Request) {
   try {
-    const user = await getAdminUser()
+    const user = await requireAdmin()
     if (!user) return unauthorized()
 
     const form = await req.formData().catch(() => null)
@@ -48,7 +48,7 @@ export async function POST(req: Request) {
 /** Hapus favicon kustom. */
 export async function DELETE() {
   try {
-    const user = await getAdminUser()
+    const user = await requireAdmin()
     if (!user) return unauthorized()
 
     removeUploadedImage(BASE_NAME)

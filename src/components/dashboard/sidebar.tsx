@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import {
   BarChart3,
+  Building2,
   ChevronDown,
   Eye,
   LayoutDashboard,
@@ -15,7 +16,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { DkiEmblem } from '@/components/dashboard/emblem'
-import type { AppSettingsDto } from '@/types/budget'
+import type { AppSettingsDto, AuthUserDto } from '@/types/budget'
 
 export type SectionId =
   | 'apbd'
@@ -33,6 +34,8 @@ export type SectionId =
   | 'admin-import'
   | 'admin-transparansi'
   | 'admin-settings'
+  | 'admin-opd'
+  | 'opd-dashboard'
 
 interface NavChild {
   id: SectionId
@@ -88,24 +91,32 @@ const ADMIN_NAV: NavGroup = {
     { id: 'admin-budget', label: 'Item Anggaran' },
     { id: 'admin-realisasi', label: 'Data Realisasi' },
     { id: 'admin-import', label: 'Import LRA (PDF)' },
+    { id: 'admin-opd', label: 'Data OPD/SKPD' },
     { id: 'admin-transparansi', label: 'Dokumen Transparansi' },
     { id: 'admin-settings', label: 'Pengaturan Aplikasi' },
   ],
+}
+
+const OPD_NAV: NavGroup = {
+  id: 'opd',
+  label: 'Area OPD',
+  icon: Building2,
+  children: [{ id: 'opd-dashboard', label: 'Dashboard OPD' }],
 }
 
 interface SidebarNavProps {
   active: SectionId
   onSelect: (id: SectionId) => void
   className?: string
-  /** username admin jika sudah login; null jika belum */
-  admin: string | null
+  /** user yang sedang login (admin penuh atau akun OPD); null jika belum */
+  user: AuthUserDto | null
   onLoginClick: () => void
   onLogout: () => void
   /** pengaturan aplikasi (nama, logo, dsb.) */
   settings: AppSettingsDto
 }
 
-export function SidebarNav({ active, onSelect, className, admin, onLoginClick, onLogout, settings }: SidebarNavProps) {
+export function SidebarNav({ active, onSelect, className, user, onLoginClick, onLogout, settings }: SidebarNavProps) {
   // grup yang berisi item aktif terbuka secara default
   const [open, setOpen] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {
@@ -113,8 +124,9 @@ export function SidebarNav({ active, onSelect, className, admin, onLoginClick, o
       realisasi: false,
       transparansi: false,
       admin: false,
+      opd: true,
     }
-    const all = [NAV, ADMIN_NAV].flat()
+    const all = [NAV, ADMIN_NAV, OPD_NAV].flat()
     for (const g of all) {
       if (g.children.some((c) => c.id === active)) initial[g.id] = true
     }
@@ -208,15 +220,27 @@ export function SidebarNav({ active, onSelect, className, admin, onLoginClick, o
 
           {NAV.map(renderGroup)}
 
-          {admin && (
+          {user?.role === 'admin' && (
             <>
               <li className="pt-3">
                 <p className="flex items-center gap-2 px-3 pb-1 text-[10px] font-bold uppercase tracking-[0.2em] text-amber-400/90">
                   <Settings2 className="h-3 w-3" aria-hidden="true" />
-                  Area Admin — {admin}
+                  Area Admin — {user.username}
                 </p>
               </li>
               {renderGroup(ADMIN_NAV)}
+            </>
+          )}
+
+          {user?.role === 'opd' && (
+            <>
+              <li className="pt-3">
+                <p className="flex items-center gap-2 px-3 pb-1 text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-300/90">
+                  <Building2 className="h-3 w-3" aria-hidden="true" />
+                  Area OPD — {user.opdName ?? user.username}
+                </p>
+              </li>
+              {renderGroup(OPD_NAV)}
             </>
           )}
         </ul>
@@ -224,14 +248,14 @@ export function SidebarNav({ active, onSelect, className, admin, onLoginClick, o
 
       {/* Footer sidebar */}
       <div className="border-t border-white/10 px-4 py-3">
-        {admin ? (
+        {user ? (
           <button
             type="button"
             onClick={onLogout}
             className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm font-semibold text-slate-200 transition-colors hover:bg-white/10"
           >
             <LogOut className="h-4 w-4 shrink-0" aria-hidden="true" />
-            Keluar ({admin})
+            Keluar ({user.username})
           </button>
         ) : (
           <button

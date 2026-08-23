@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { getAdminUser, unauthorized } from '@/lib/auth'
+import { requireAdmin, unauthorized } from '@/lib/auth'
 import type { BudgetItemRowDto } from '@/types/budget'
 
 type BudgetItemRow = {
@@ -15,7 +15,7 @@ type BudgetItemRow = {
 
 export async function GET(req: Request) {
   try {
-    const user = await getAdminUser()
+    const user = await requireAdmin()
     if (!user) return unauthorized()
 
     const { searchParams } = new URL(req.url)
@@ -62,7 +62,7 @@ function validateBody(body: Record<string, unknown>): string | null {
 
 export async function POST(req: Request) {
   try {
-    const user = await getAdminUser()
+    const user = await requireAdmin()
     if (!user) return unauthorized()
 
     const body = (await req.json().catch(() => null)) as Record<string, unknown> | null
@@ -105,7 +105,7 @@ export async function POST(req: Request) {
 
 export async function PUT(req: Request) {
   try {
-    const user = await getAdminUser()
+    const user = await requireAdmin()
     if (!user) return unauthorized()
 
     const body = (await req.json().catch(() => null)) as Record<string, unknown> | null
@@ -157,7 +157,7 @@ export async function PUT(req: Request) {
 
 export async function DELETE(req: Request) {
   try {
-    const user = await getAdminUser()
+    const user = await requireAdmin()
     if (!user) return unauthorized()
 
     const { searchParams } = new URL(req.url)

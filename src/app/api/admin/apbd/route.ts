@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { getAdminUser, unauthorized } from '@/lib/auth'
+import { requireAdmin, unauthorized } from '@/lib/auth'
 import type { ApbdSummaryDto } from '@/types/budget'
 
 /** Bentuk DTO ringkasan APBD (sama dengan /api/apbd). */
@@ -32,7 +32,7 @@ function toFiniteNumber(value: unknown): number | null {
 
 export async function GET() {
   try {
-    const user = await getAdminUser()
+    const user = await requireAdmin()
     if (!user) return unauthorized()
 
     const rows = await db.apbdSummary.findMany({ orderBy: { year: 'desc' } })
@@ -45,7 +45,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const user = await getAdminUser()
+    const user = await requireAdmin()
     if (!user) return unauthorized()
 
     const body = (await req.json().catch(() => null)) as Record<string, unknown> | null
@@ -111,7 +111,7 @@ export async function POST(req: Request) {
 
 export async function DELETE(req: Request) {
   try {
-    const user = await getAdminUser()
+    const user = await requireAdmin()
     if (!user) return unauthorized()
 
     const { searchParams } = new URL(req.url)

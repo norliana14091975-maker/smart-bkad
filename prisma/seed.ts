@@ -1,14 +1,7 @@
 import { PrismaClient } from '@prisma/client'
-import crypto from 'crypto'
-
+import { hashPassword } from '../src/lib/password'
 const db = new PrismaClient()
 
-/** Hash password dengan scrypt: "salt:hash" (hex). */
-export function hashPassword(password: string): string {
-  const salt = crypto.randomBytes(16).toString('hex')
-  const hash = crypto.scryptSync(password, salt, 64).toString('hex')
-  return `${salt}:${hash}`
-}
 
 // ---------------------------------------------------------------------------
 // Data anggaran publik APBD Provinsi DKI Jakarta (dalam Rupiah)

@@ -133,3 +133,44 @@ export interface AppSettingsDto {
   faviconUrl: string | null
   footerText: string
 }
+
+// User yang sedang login (admin penuh atau akun OPD)
+export interface AuthUserDto {
+  username: string
+  role: 'admin' | 'opd'
+  opdName?: string | null
+}
+
+// Baris OPD/SKPD untuk tabel manajemen admin
+export interface OpdRowDto {
+  id: number
+  code: string
+  name: string
+  active: boolean
+  username: string | null
+  createdAt: string
+}
+
+// Kredensial akun OPD yang baru dibuat/reset (password hanya tampil sekali)
+export interface OpdCredentialsDto {
+  opdName: string
+  username: string
+  password: string
+}
+
+// Data untuk Dashboard OPD (profil + realisasi SKPD miliknya)
+export interface OpdSelfDto {
+  opd: {
+    id: number
+    code: string
+    name: string
+    username: string
+    active: boolean
+    createdAt: string
+  }
+  realisasi: {
+    pendapatan: { anggaran: number; realisasi: number }
+    belanja: { anggaran: number; realisasi: number }
+    pembiayaan: { anggaran: number; realisasi: number }
+  } | null
+}

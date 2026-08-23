@@ -2,21 +2,22 @@
 
 import { Lock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import type { AuthUserDto } from '@/types/budget'
 
 /**
  * Pembungkus section admin: jika belum login, tampilkan kartu peringatan
  * dengan tombol login (pertahanan ekstra — menu admin hanya muncul setelah login).
  */
 export function AdminGuard({
-  admin,
+  user,
   onLoginClick,
   children,
 }: {
-  admin: string | null
+  user: AuthUserDto | null
   onLoginClick: () => void
   children: React.ReactNode
 }) {
-  if (admin) return <>{children}</>
+  if (user?.role === 'admin') return <>{children}</>
 
   return (
     <div className="flex min-h-[40vh] items-center justify-center">
