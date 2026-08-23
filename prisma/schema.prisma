@@ -116,3 +116,11 @@ model ImportLog {
 
   @@map("import_log")
 }
+
+// Pengaturan aplikasi (key-value): nama, judul, logo, favicon, dll.
+model AppSetting {
+  key   String @id
+  value String
+
+  @@map("app_setting")
+}

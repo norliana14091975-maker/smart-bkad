@@ -21,8 +21,16 @@ export function DkiEmblem({ className = 'h-8 w-8' }: { className?: string }) {
   )
 }
 
-export function BpkdLogo({ className = '' }: { className?: string }) {
-  // Logo geometris: tiga segitiga warna (merah/kuning/biru) + teks BPKD
+export function BpkdLogo({
+  className = '',
+  text = 'BPKD',
+  subtext = 'Provinsi DKI Jakarta',
+}: {
+  className?: string
+  text?: string
+  subtext?: string
+}) {
+  // Logo geometris: tiga segitiga warna (merah/kuning/biru) + teks brand
   return (
     <div className={`flex items-center gap-3 ${className}`}>
       <svg viewBox="0 0 64 64" className="h-12 w-12 shrink-0" aria-hidden="true" role="presentation">
@@ -36,10 +44,10 @@ export function BpkdLogo({ className = '' }: { className?: string }) {
       </svg>
       <div className="leading-tight">
         <div className="text-lg font-extrabold tracking-wide text-white drop-shadow-sm">
-          BPKD
+          {text}
         </div>
         <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/80">
-          Provinsi DKI Jakarta
+          {subtext}
         </div>
       </div>
     </div>

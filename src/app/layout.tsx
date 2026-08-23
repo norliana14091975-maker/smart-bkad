@@ -3,6 +3,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { Providers } from "@/components/providers";
+import { getSettings } from "@/lib/settings";
+import { DEFAULT_SETTINGS } from "@/lib/default-settings";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -14,18 +16,28 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "Dashboard Keuangan DKI",
-  description:
-    "Dashboard Monitoring Pengelolaan Keuangan Daerah, Anggaran Pendapatan dan Belanja Daerah Pemerintah Provinsi DKI Jakarta",
-  keywords: [
-    "Dashboard Keuangan",
-    "APBD",
-    "DKI Jakarta",
-    "BPKD",
-    "Anggaran Daerah",
-  ],
-};
+// Metadata dinamis: judul, deskripsi, dan favicon mengikuti pengaturan admin
+export async function generateMetadata(): Promise<Metadata> {
+  let settings = DEFAULT_SETTINGS;
+  try {
+    settings = await getSettings();
+  } catch {
+    // database belum siap → pakai nilai bawaan
+  }
+
+  return {
+    title: settings.appTitle,
+    description: settings.appDescription,
+    keywords: [
+      "Dashboard Keuangan",
+      "APBD",
+      "DKI Jakarta",
+      "BPKD",
+      "Anggaran Daerah",
+    ],
+    ...(settings.faviconUrl ? { icons: { icon: settings.faviconUrl } } : {}),
+  };
+}
 
 export default function RootLayout({
   children,

@@ -121,3 +121,15 @@ export interface ImportLogDto {
   message: string | null
   createdAt: string
 }
+
+// Pengaturan aplikasi (nama, logo, favicon, teks brand & footer)
+export interface AppSettingsDto {
+  appName: string
+  appTitle: string
+  appDescription: string
+  brandText: string
+  brandSubtext: string
+  logoUrl: string | null
+  faviconUrl: string | null
+  footerText: string
+}

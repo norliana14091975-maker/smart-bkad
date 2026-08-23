@@ -99,3 +99,22 @@ Work Log:
 
 Stage Summary:
 - Fitur lengkap: login admin (admin/admin123, sesi cookie httpOnly 7 hari, scrypt), dashboard admin 6 modul pengelolaan data, import LRA dari PDF (pdf-parse + LLM chunked, replace/append) terverifikasi end-to-end; lint bersih; tanpa error runtime
+
+---
+Task ID: 4
+Agent: Z.ai Code (main)
+Task: Fitur Pengaturan Aplikasi (ubah nama aplikasi, logo, favicon, dan teks lainnya)
+
+Work Log:
+- Prisma: model AppSetting (key-value) → db:push
+- Backend: src/lib/default-settings.ts (nilai bawaan, client-safe), src/lib/settings.ts (getSettings gabung default, server), src/lib/image-upload.ts (deteksi magic bytes PNG/JPG/GIF/WebP/ICO/SVG + sanitasi SVG anti-XSS + simpan ke public/uploads dengan cache-buster ?v=)
+- API: GET /api/settings (publik), PUT /api/admin/settings (teks dengan limit panjang), POST /api/admin/settings/reset, POST+DELETE /api/admin/settings/logo, POST+DELETE /api/admin/settings/favicon (semua admin butuh sesi)
+- Integrasi: layout.tsx generateMetadata dinamis (title/description/icons dari DB); sidebar (brand appName + logo kustom + menu "Pengaturan Aplikasi" + footer teks); HeaderBand (logo kustom + brandText/subtext, BpkdLogo kini parametris); VisitorFooter (footerText); page.tsx (useSettings + merge default + efek document.title & favicon live tanpa reload); hooks/use-settings.ts dipakai bersama page & admin
+- UI admin: admin-settings-section.tsx — form 6 kolom teks dengan counter karakter + draft/batalkan, kartu Logo & Favicon (preview, unggah, hapus), reset semua dengan AlertDialog
+- Investigasi anomali "[m hilang": terbukti file di disk BENAR (Write/Edit tool aman); yang ter-strip hanyalah tampilan input/output command bash tool (sanitasi ANSI). Scanner damage = 0 file rusak. File tes dibersihkan
+- Dev server sempat mati (dibunuh untuk regenerasi Prisma client) — ditemukan teknik start persisten: proses orphan double-fork (setsid bash -c 'exec ...') diadopsi PID 1 sehingga bertahan antar-call
+- Generate logo & favicon uji via z-ai image CLI (JPEG terdeteksi benar oleh magic-byte check → tersimpan .jpg)
+- Verifikasi end-to-end: API (login/PUT/upload/unauth 401/head HTML menampilkan title+favicon kustom via generateMetadata), browser (sidebar "KEUANGAN DKI" + logo kustom di sidebar/header + footer kustom + title tab berubah; ubah nama via UI → sidebar update instan; upload logo via UI → versi cache baru; reset via UI → semua kembali bawaan + file terhapus), restart server segar → kompilasi bersih, tanpa error console, lint bersih
+
+Stage Summary:
+- Fitur Pengaturan Aplikasi lengkap: nama aplikasi, judul halaman (tab browser), deskripsi SEO, teks & sub-teks brand header, footer, logo (unggah/hapus), favicon (unggah/hapus), reset semua — tersimpan di DB, live update tanpa reload, favicon/title juga dirender server-side via generateMetadata; dev server berjalan persisten

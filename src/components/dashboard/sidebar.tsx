@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { DkiEmblem } from '@/components/dashboard/emblem'
+import type { AppSettingsDto } from '@/types/budget'
 
 export type SectionId =
   | 'apbd'
@@ -31,6 +32,7 @@ export type SectionId =
   | 'admin-realisasi'
   | 'admin-import'
   | 'admin-transparansi'
+  | 'admin-settings'
 
 interface NavChild {
   id: SectionId
@@ -87,6 +89,7 @@ const ADMIN_NAV: NavGroup = {
     { id: 'admin-realisasi', label: 'Data Realisasi' },
     { id: 'admin-import', label: 'Import LRA (PDF)' },
     { id: 'admin-transparansi', label: 'Dokumen Transparansi' },
+    { id: 'admin-settings', label: 'Pengaturan Aplikasi' },
   ],
 }
 
@@ -98,9 +101,11 @@ interface SidebarNavProps {
   admin: string | null
   onLoginClick: () => void
   onLogout: () => void
+  /** pengaturan aplikasi (nama, logo, dsb.) */
+  settings: AppSettingsDto
 }
 
-export function SidebarNav({ active, onSelect, className, admin, onLoginClick, onLogout }: SidebarNavProps) {
+export function SidebarNav({ active, onSelect, className, admin, onLoginClick, onLogout, settings }: SidebarNavProps) {
   // grup yang berisi item aktif terbuka secara default
   const [open, setOpen] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {
@@ -170,9 +175,17 @@ export function SidebarNav({ active, onSelect, className, admin, onLoginClick, o
     <div className={cn('flex h-full flex-col bg-[#1b2a4a] text-slate-200', className)}>
       {/* Brand */}
       <div className="flex items-center gap-2 border-b border-white/10 px-4 py-4">
-        <DkiEmblem className="h-9 w-9 shrink-0" />
-        <span className="text-base font-semibold tracking-[0.3em] text-white" aria-label="Dashboard">
-          DASHBOARD
+        {settings.logoUrl ? (
+          <img
+            src={settings.logoUrl}
+            alt={settings.appName}
+            className="h-9 w-9 shrink-0 rounded object-contain"
+          />
+        ) : (
+          <DkiEmblem className="h-9 w-9 shrink-0" />
+        )}
+        <span className="text-base font-semibold tracking-[0.3em] text-white" aria-label={settings.appName}>
+          {settings.appName}
         </span>
       </div>
 
@@ -231,8 +244,8 @@ export function SidebarNav({ active, onSelect, className, admin, onLoginClick, o
           </button>
         )}
         <p className="mt-2 text-[11px] text-slate-400">
-          Dashboard Keuangan DKI
-          <span className="block">Pemerintah Provinsi DKI Jakarta</span>
+          {settings.appTitle}
+          <span className="block">{settings.brandSubtext}</span>
         </p>
       </div>
     </div>

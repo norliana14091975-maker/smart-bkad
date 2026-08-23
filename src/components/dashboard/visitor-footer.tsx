@@ -3,9 +3,9 @@
 import { useEffect, useState } from 'react'
 import { Users } from 'lucide-react'
 import { formatRupiah0 } from '@/lib/format'
-import type { VisitorDto } from '@/types/budget'
+import type { AppSettingsDto, VisitorDto } from '@/types/budget'
 
-export function VisitorFooter() {
+export function VisitorFooter({ settings }: { settings: AppSettingsDto }) {
   const [visitor, setVisitor] = useState<VisitorDto | null>(null)
 
   useEffect(() => {
@@ -46,9 +46,7 @@ export function VisitorFooter() {
             )}
           </span>
         </p>
-        <p className="text-xs text-slate-400">
-          Dashboard Monitoring Pengelolaan Keuangan Daerah — Pemerintah Provinsi DKI Jakarta
-        </p>
+        <p className="text-xs text-slate-400">{settings.footerText}</p>
       </div>
     </footer>
   )

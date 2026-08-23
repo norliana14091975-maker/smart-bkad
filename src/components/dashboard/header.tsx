@@ -3,16 +3,13 @@
 import { Menu } from 'lucide-react'
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from '@/components/ui/breadcrumb'
 import { BpkdLogo, GoldEmblem } from '@/components/dashboard/emblem'
-
-interface HeaderBandProps {
-  onToggleSidebar: () => void
-}
+import type { AppSettingsDto } from '@/types/budget'
 
 /**
- * Pita biru atas: logo BPKD di kiri, lencana emas di kanan,
+ * Pita biru atas: logo (bawaan/kustom) di kiri, lencana emas di kanan,
  * dengan pola watermark ikon keuangan.
  */
-export function HeaderBand() {
+export function HeaderBand({ settings }: { settings: AppSettingsDto }) {
   return (
     <div
       className="relative overflow-hidden bg-gradient-to-r from-[#17408b] via-[#1d4ed8] to-[#17408b]"
@@ -28,21 +25,37 @@ export function HeaderBand() {
         }}
       />
       <div className="relative mx-auto flex max-w-full items-center justify-between gap-4 px-4 py-4 sm:px-6">
-        <BpkdLogo />
+        {settings.logoUrl ? (
+          <div className="flex items-center gap-3">
+            <img
+              src={settings.logoUrl}
+              alt={settings.brandText}
+              className="h-12 w-12 shrink-0 object-contain drop-shadow-sm"
+            />
+            <div className="leading-tight">
+              <div className="text-lg font-extrabold tracking-wide text-white drop-shadow-sm">
+                {settings.brandText}
+              </div>
+              <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/80">
+                {settings.brandSubtext}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <BpkdLogo text={settings.brandText} subtext={settings.brandSubtext} />
+        )}
         <GoldEmblem className="hidden h-20 w-20 shrink-0 sm:block md:h-24 md:w-24" />
       </div>
     </div>
   )
 }
 
-interface PageHeaderProps extends HeaderBandProps {
-  title: string
-  breadcrumbHome: string
-  breadcrumbCurrent: string
+interface PageHeaderProps {
+  onToggleSidebar: () => void
 }
 
 /** Baris judul halaman + breadcrumb, dengan tombol toggle sidebar di mobile. */
-export function PageHeader({ title, breadcrumbHome, breadcrumbCurrent, onToggleSidebar }: PageHeaderProps) {
+export function PageHeader({ title, breadcrumbHome, breadcrumbCurrent, onToggleSidebar }: PageHeaderProps & { title: string; breadcrumbHome: string; breadcrumbCurrent: string }) {
   return (
     <div className="flex flex-col gap-2 border-b bg-background px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
       <div className="flex items-center gap-3">

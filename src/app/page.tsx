@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { HeaderBand, PageHeader } from '@/components/dashboard/header'
 import { SidebarNav, type SectionId } from '@/components/dashboard/sidebar'
@@ -18,8 +18,11 @@ import { AdminBudgetSection } from '@/components/dashboard/sections/admin-budget
 import { AdminRealisasiSection } from '@/components/dashboard/sections/admin-realisasi-section'
 import { AdminImportSection } from '@/components/dashboard/sections/admin-import-section'
 import { AdminTransparansiSection } from '@/components/dashboard/sections/admin-transparansi-section'
+import { AdminSettingsSection } from '@/components/dashboard/sections/admin-settings-section'
 import { LoginDialog } from '@/components/dashboard/admin/login-dialog'
 import { AdminGuard } from '@/components/dashboard/admin/admin-guard'
+import { useSettings } from '@/hooks/use-settings'
+import { DEFAULT_SETTINGS } from '@/lib/default-settings'
 
 const SECTION_META: Record<
   SectionId,
@@ -39,6 +42,7 @@ const SECTION_META: Record<
   'admin-realisasi': { title: 'Kelola Data Realisasi', breadcrumbHome: 'Admin', breadcrumbCurrent: 'Data Realisasi' },
   'admin-import': { title: 'Import LRA dari PDF', breadcrumbHome: 'Admin', breadcrumbCurrent: 'Import LRA' },
   'admin-transparansi': { title: 'Kelola Dokumen Transparansi', breadcrumbHome: 'Admin', breadcrumbCurrent: 'Transparansi' },
+  'admin-settings': { title: 'Pengaturan Aplikasi', breadcrumbHome: 'Admin', breadcrumbCurrent: 'Pengaturan' },
 }
 
 const ADMIN_SECTIONS: SectionId[] = [
@@ -48,6 +52,7 @@ const ADMIN_SECTIONS: SectionId[] = [
   'admin-realisasi',
   'admin-import',
   'admin-transparansi',
+  'admin-settings',
 ]
 
 export default function Home() {
@@ -55,6 +60,13 @@ export default function Home() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [admin, setAdmin] = useState<string | null>(null)
   const [loginOpen, setLoginOpen] = useState(false)
+
+  // Pengaturan aplikasi (nama, logo, favicon, teks) — gabung dengan bawaan
+  const settingsQuery = useSettings()
+  const settings = useMemo(
+    () => ({ ...DEFAULT_SETTINGS, ...(settingsQuery.data ?? {}) }),
+    [settingsQuery.data]
+  )
 
   const meta = SECTION_META[section]
 
@@ -73,9 +85,26 @@ export default function Home() {
     }
   }, [])
 
+  // Judul tab browser mengikuti pengaturan
   useEffect(() => {
-    document.title = 'Dashboard Keuangan DKI'
-  }, [])
+    document.title = settings.appTitle
+  }, [settings.appTitle])
+
+  // Favicon mengikuti pengaturan (diperbarui langsung tanpa reload)
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    const link = document.querySelector<HTMLLinkElement>("link[rel~='icon']")
+    if (settings.faviconUrl) {
+      if (link) {
+        link.href = settings.faviconUrl
+      } else {
+        const el = document.createElement('link')
+        el.rel = 'icon'
+        el.href = settings.faviconUrl
+        document.head.appendChild(el)
+      }
+    }
+  }, [settings.faviconUrl])
 
   const handleSelect = (id: SectionId) => {
     setSection(id)
@@ -113,6 +142,7 @@ export default function Home() {
             onSelect={handleSelect}
             className="h-full"
             admin={admin}
+            settings={settings}
             onLoginClick={() => setLoginOpen(true)}
             onLogout={handleLogout}
           />
@@ -127,6 +157,7 @@ export default function Home() {
               onSelect={handleSelect}
               className="h-full rounded-r-lg"
               admin={admin}
+              settings={settings}
               onLoginClick={() => {
                 setMobileOpen(false)
                 setLoginOpen(true)
@@ -138,7 +169,7 @@ export default function Home() {
 
         {/* Konten utama */}
         <div className="flex min-w-0 flex-1 flex-col">
-          <HeaderBand />
+          <HeaderBand settings={settings} />
           <PageHeader
             title={meta.title}
             breadcrumbHome={meta.breadcrumbHome}
@@ -164,11 +195,12 @@ export default function Home() {
                 {section === 'admin-realisasi' && <AdminRealisasiSection />}
                 {section === 'admin-import' && <AdminImportSection />}
                 {section === 'admin-transparansi' && <AdminTransparansiSection />}
+                {section === 'admin-settings' && <AdminSettingsSection />}
               </AdminGuard>
             )}
           </main>
 
-          <VisitorFooter />
+          <VisitorFooter settings={settings} />
         </div>
       </div>
 
