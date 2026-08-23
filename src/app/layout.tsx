@@ -34,7 +34,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="id" suppressHydrationWarning>
+      {/* suppressHydrationWarning: ekstensi browser (mis. Grammarly) menambah
+          atribut data-* pada <body> sebelum React hidrasi */}
       <body
+        suppressHydrationWarning
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >
         <Providers>{children}</Providers>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { CalendarDays, Landmark, PiggyBank, TrendingUp, Wallet } from 'lucide-react'
 import { Input } from '@/components/ui/input'
@@ -14,7 +14,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { SectionHeading } from '@/components/dashboard/section-heading'
-import { formatDateID, formatPct, formatRupiah, formatTriliun } from '@/lib/format'
+import { useToday } from '@/hooks/use-today'
+import { formatDateFromISO, formatPct, formatRupiah, formatTriliun } from '@/lib/format'
 import type { RealisasiAkunDto } from '@/types/budget'
 
 interface Summary {
@@ -42,6 +43,12 @@ export function RealisasiAkunSection() {
     queryFn: fetchRealisasiAkun,
   })
 
+  // Tanggal hari ini hanya tersedia setelah hidrasi (aman dari mismatch
+  // zona waktu server vs browser); pengguna dapat mengubahnya lewat input.
+  const today = useToday()
+  const [dateOverride, setDateOverride] = useState<string | null>(null)
+  const date = dateOverride ?? today
+
   const items = data?.data ?? []
   const summary = data?.summary
 
@@ -67,7 +74,8 @@ export function RealisasiAkunSection() {
         <Input
           id="tanggal-akun"
           type="date"
-          defaultValue={new Date().toISOString().slice(0, 10)}
+          value={date}
+          onChange={(e) => setDateOverride(e.target.value)}
           className="h-9 w-40"
         />
       </div>
@@ -75,7 +83,11 @@ export function RealisasiAkunSection() {
       <SectionHeading
         title="Realisasi Anggaran"
         subtitle="Pemerintah Provinsi DKI Jakarta"
-        extra={`Tahun Anggaran ${new Date().getFullYear()} — sampai dengan: ${formatDateID(new Date())}`}
+        extra={
+          date
+            ? `Tahun Anggaran ${date.slice(0, 4)} — sampai dengan: ${formatDateFromISO(date)}`
+            : undefined
+        }
       />
       {isError && (
         <p className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">

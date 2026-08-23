@@ -22,7 +22,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { SectionHeading } from '@/components/dashboard/section-heading'
-import { formatDateID, formatRupiah0 } from '@/lib/format'
+import { useToday } from '@/hooks/use-today'
+import { formatDateFromISO, formatRupiah0 } from '@/lib/format'
 import type { RealisasiSkpdDto } from '@/types/budget'
 
 async function fetchSkpd(q: string): Promise<RealisasiSkpdDto[]> {
@@ -35,7 +36,12 @@ async function fetchSkpd(q: string): Promise<RealisasiSkpdDto[]> {
 export function RealisasiSkpdSection() {
   const [search, setSearch] = useState('')
   const [applied, setApplied] = useState('')
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
+
+  // Tanggal hari ini hanya tersedia setelah hidrasi (aman dari mismatch
+  // zona waktu server vs browser); pengguna dapat mengubahnya lewat input.
+  const today = useToday()
+  const [dateOverride, setDateOverride] = useState<string | null>(null)
+  const date = dateOverride ?? today
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['realisasi-skpd', applied],
@@ -68,7 +74,7 @@ export function RealisasiSkpdSection() {
             id="tanggal-skpd"
             type="date"
             value={date}
-            onChange={(e) => setDate(e.target.value)}
+            onChange={(e) => setDateOverride(e.target.value)}
             className="h-9 w-40"
           />
         </div>
@@ -115,7 +121,11 @@ export function RealisasiSkpdSection() {
       <SectionHeading
         title="Realisasi Anggaran"
         subtitle="Pemerintah Provinsi DKI Jakarta"
-        extra={`Tahun Anggaran ${new Date().getFullYear()} — sampai dengan: ${formatDateID(new Date())}`}
+        extra={
+          date
+            ? `Tahun Anggaran ${date.slice(0, 4)} — sampai dengan: ${formatDateFromISO(date)}`
+            : undefined
+        }
       />
       {isError && (
         <p className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
