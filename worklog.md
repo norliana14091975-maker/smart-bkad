@@ -219,3 +219,27 @@ Work Log:
 
 Stage Summary:
 - Filter level kode rekening (L1 Akun, L2 Kelompok, L3 Jenis, L4 Obyek, L5 Rincian Obyek, L6 Sub Rincian Obyek) kini tersedia dan konsisten di SEMUA tampilan rincian (dialog detail per-SKPD, dashboard OPD, realisasi per-akun publik, preview import, kelola admin) dengan satu kontrol bersama; pilihan dipersist (localStorage) sehingga preferensi Kepala Daerah tetap berlaku lintas halaman/sesi; ringkasan agregat tidak terpengaruh filter (hanya kedalaman rincian yang ditampilkan)
+
+---
+Task ID: 10
+Agent: Z.ai Code (main)
+Task: Perbaiki kegagalan import PDF — ganti ekstraksi LRA dari AI/LLM menjadi parser deterministik murni (tanpa AI)
+
+Work Log:
+- Diagnosa: import sebelumnya bergantung pada LLM per chunk teks (60-75 detik per file) sehingga rentan gagal (rate limit/batas token/respons terpotong) dan terasa "gagal menjalankan import"; reproduksi via curl berhasil namun lambat
+- src/lib/import-lra.ts ditulis ulang: HAPUS seluruh ketergantungan AI (import ZAI, LLM_SYSTEM_PROMPT, buildChunkPrompt, chunkText, parseLlmJsonArray, CHUNK_SIZE)
+- Parser deterministik baru parseLraRows(): ekstraksi baris LRA langsung dari teks PDF dengan aturan:
+  - pola baris data: kode rekening di awal baris (bertitik/flat) + uraian + kolom angka
+  - pola angka moneter Indonesia yang WAJIB punya koma desimal/pemisah ribuan ("\d{1,3}(\.\d{3})+(,\d{1,2})?|\d+,\d{1,2}") sehingga angka di dalam nama (mis. "Bintang 3", "PPh 21") tidak salah terbaca sebagai nilai
+  - dua angka pertama = ANGGARAN 2026 & REALISASI 2026 (kolom % dan REALISASI 2025 diabaikan)
+  - uraian/nominal yang terlipat (wrap) ke baris berikut digabung otomatis (berhenti di baris kode/JUMLAH baru)
+  - baris noise dilewati: judul, kepala kolom, "JUMLAH", penanda halaman "-- 1 of 2 --", baris tanggal periode
+  - kode divalidasi normalizeKode (BAS Permendagri: flat/titik, level 1-6, kelompok baku) — kode non-BAS dihitung dropped (hanya yang diawali 4-9 agar baris kolom "1 2 3..." tidak terhitung)
+  - nama L1/L2 dinormalkan ke nomenklatur baku; extractLraItems tetap mengembalikan {items, stats} + applyHierarchy (induk = jumlah anak)
+- Perbaikan regresi: patch awal tak sengaca menghapus extractPdfText (import 500 "export not found") — dipulihkan
+- Teks UI & komentar dibersihkan dari sebutan "AI" (panel import: "secara otomatis", dropzone: "Membaca PDF & mengklasifikasi kode rekening")
+- Uji: PDF kecamatan asli → 109 valid / 0 ditolak / 109 total, 10/10 nilai persis LRA, ekstraksi 0,3-1,5 detik (sebelumnya 65-75 detik, ~200x lebih cepat); PDF uji BAS → 13 valid + 1 non-BAS ditolak (7.1.01) + 7 induk diturunkan, 12/12 aturan lulus (termasuk flat 4102→4.1.02 dan rekonsiliasi induk=jumlah anak)
+- Uji end-to-end: API import+confirm (0,28s, 109 tersimpan, SKPD summary otomatis 10jt/0 & 2,86M/1,54M); browser: upload via UI → "Ekstraksi berhasil — 109 baris" instan → konfirmasi → log Tersimpan; drill-down Realisasi Per-SKPD → dialog 109 baris; data seed di-restore + kecamatan di-import ulang (state bersih); tanpa error console; lint bersih
+
+Stage Summary:
+- Import LRA kini 100% deterministik tanpa AI: cepat (~0,3 detik vs 65 detik), stabil (tidak tergantung kuota/rate limit LLM), akurat (nilai disalin persis dari teks via regex kolom, bukan diktik LLM), tetap dengan validasi BAS Permendagri level 1-6, nomenklatur baku, penolakan kode non-BAS, dan rekonsiliasi hierarki induk=jumlah anak

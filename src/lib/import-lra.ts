@@ -1,6 +1,5 @@
 import fs from 'fs'
 import path from 'path'
-import ZAI from 'z-ai-web-dev-sdk'
 import { db } from '@/lib/db'
 import { applyHierarchy, normalizeKode, standardNameFor } from '@/lib/kode-akun'
 
@@ -10,7 +9,6 @@ import { applyHierarchy, normalizeKode, standardNameFor } from '@/lib/kode-akun'
 
 export const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
 export const MIN_TEXT_LENGTH = 50 // lebih pendek dari ini dianggap PDF hasil scan
-const CHUNK_SIZE = 8000 // ±8.000 karakter per chunk agar keluaran LLM aman dari batas token
 
 /** Item LRA hasil ekstraksi, sudah diklasifikasi per level kode. */
 export interface LraItem {
@@ -87,10 +85,10 @@ function parseLooseNumber(value: unknown): number | null {
 }
 
 /**
- * Validasi satu entri hasil LLM menurut aturan BAS Permendagri:
- * - kode dinormalisasi ke bentuk baku (bertitik/flat diterima)
- * - nama akun/kelompok dinormalkan ke nomenklatur baku
- * - anggaran tidak boleh negatif; realisasi boleh negatif (koreksi LRA)
+ * Validasi satu entri item LRA (objek dari hasil parse/frontend) menurut
+ * aturan BAS Permendagri: kode dinormalisasi ke bentuk baku (bertitik/flat
+ * diterima), nama akun/kelompok dinormalkan ke nomenklatur baku, anggaran
+ * tidak boleh negatif, realisasi boleh negatif (koreksi LRA).
  */
 function normalizeItem(entry: unknown): LraItem | null {
   if (typeof entry !== 'object' || entry === null) return null
@@ -116,118 +114,8 @@ function normalizeItem(entry: unknown): LraItem | null {
   return { code: normalized.code, name, anggaran, realisasi, level: normalized.level }
 }
 
-/**
- * Parse jawaban LLM secara tangguh: buang code fence lalu ambil array JSON.
- * Respons LLM dapat terpotong oleh batas token sehingga array tidak tertutup;
- * pada kasus itu pulihkan dengan membaca setiap objek {...} yang utuh satu
- * per satu sehingga item sebelum titik potong tetap terselamatkan.
- */
-function parseLlmJsonArray(raw: string): unknown[] {
-  if (!raw) return []
-
-  let s = raw.trim()
-  s = s
-    .replace(/^```(?:json)?\s*/i, '')
-    .replace(/\s*```\s*$/i, '')
-    .trim()
-
-  const start = s.indexOf('[')
-  if (start === -1) return []
-  const end = s.lastIndexOf(']')
-
-  // 1) Coba parse array utuh terlebih dahulu
-  if (end > start) {
-    try {
-      const parsed: unknown = JSON.parse(s.slice(start, end + 1))
-      if (Array.isArray(parsed)) return parsed
-    } catch {
-      // lanjut ke pemulihan objek per objek
-    }
-  }
-
-  // 2) Pemulihan respons terpotong: objek LRA datar tanpa braket bersarang
-  const items: unknown[] = []
-  const body = s.slice(start)
-  const objectRe = /\{[^{}]*\}/g
-  for (const match of body.matchAll(objectRe)) {
-    try {
-      items.push(JSON.parse(match[0]))
-    } catch {
-      // lewati objek rusak
-    }
-  }
-  return items
-}
-
-/** Potong teks menjadi chunk pada batas baris agar baris tabel tidak terbelah. */
-function chunkText(text: string, size = CHUNK_SIZE): string[] {
-  const chunks: string[] = []
-  let start = 0
-
-  while (start < text.length) {
-    let end = Math.min(start + size, text.length)
-    if (end < text.length) {
-      const nextBreak = text.indexOf('\n', end)
-      const lastBreak = text.lastIndexOf('\n', end)
-      if (nextBreak !== -1 && nextBreak - end <= 2000) {
-        end = nextBreak + 1
-      } else if (lastBreak > start) {
-        end = lastBreak + 1
-      }
-    }
-    const chunk = text.slice(start, end)
-    if (chunk.trim()) chunks.push(chunk)
-    start = end
-  }
-
-  return chunks
-}
-
 // ---------------------------------------------------------------------------
-// Prompt LLM — ekstraksi semua level kode rekening
-// ---------------------------------------------------------------------------
-
-const LLM_SYSTEM_PROMPT =
-  'Anda adalah asisten ekstraksi data laporan keuangan daerah Indonesia ' +
-  '(LRA — Laporan Realisasi Anggaran). Tugas Anda membaca teks hasil ekstraksi PDF LRA ' +
-  'dan mengembalikan baris-baris rekening sebagai JSON yang ketat tanpa teks tambahan.'
-
-function buildChunkPrompt(chunk: string): string {
-  return (
-    'Berikut potongan teks hasil ekstraksi PDF LRA:\n\n' +
-    chunk +
-    '\n\nEkstrak SEMUA baris yang memiliki kode rekening LRA sesuai struktur Bagan Akun ' +
-    'Standar (BAS) Permendagri 77/2020, yaitu deretan angka yang diawali 4 (pendapatan), ' +
-    '5 (belanja), atau 6 (pembiayaan) dengan level:\n' +
-    '- level akun (1 digit): "4", "5", "6"\n' +
-    '- level kelompok: "4.1" s.d. "4.3", "5.1" s.d. "5.4", "6.1"-"6.2"\n' +
-    '- level jenis: "4.1.01", "5.1.02"\n' +
-    '- level obyek: "4.1.01.01", "5.1.02.01"\n' +
-    '- level rincian obyek (3 digit): "4.1.01.01.001", "5.1.01.01.001"\n' +
-    '- level sub rincian obyek (5 digit tambahan): "4.1.02.03.007.00001", "5.1.01.01.001.00001"\n' +
-    'Kode boleh tertulis tanpa titik (mis. "4102" artinya 4.1.02) — salin persis seperti di teks.\n' +
-    'KOLOM ANGKA: "anggaran" = kolom ANGGARAN 2026 (tahun berjalan), "realisasi" = kolom ' +
-    'REALISASI 2026. JANGAN memakai kolom REALISASI tahun sebelumnya (mis. REALISASI 2025) ' +
-    'atau kolom persentase.\n' +
-    'Untuk setiap baris kumpulkan: "code" (kode rekening persis seperti di teks), ' +
-    '"name" (uraian/nama rekening), "anggaran" (nilai anggaran), dan "realisasi" (nilai realisasi).\n' +
-    'Aturan:\n' +
-    '1. "anggaran" dan "realisasi" WAJIB berupa STRING yang disalin PERSIS dari teks, ' +
-    'termasuk titik dan koma apa adanya — JANGAN mengubahnya menjadi angka dan jangan ' +
-    'menghitung ulang jumlah nolnya (contoh teks "10.000.000,00" ditulis ' +
-    '"anggaran":"10.000.000,00").\n' +
-    '2. Nilai kosong, strip, atau tidak ada dianggap 0. Realisasi negatif ditulis angka minus.\n' +
-    '3. Lewati kepala kolom, baris JUMLAH/subtotal, dan baris tanpa kode rekening.\n' +
-    '4. Jangan mengarang data — hanya baris yang benar-benar ada pada teks.\n\n' +
-    'Balas HANYA array JSON valid tanpa penjelasan dan tanpa blok kode, contoh:\n' +
-    '[{"code":"4","name":"PENDAPATAN DAERAH","anggaran":"71.450.673.065.697,00","realisasi":"45.000.000.000.000,00"},\n' +
-    '{"code":"4.1.01.01.001","name":"Pajak Hotel Bintang 3","anggaran":"3.000.000.000.000,00","realisasi":"1.800.000.000.000,00"}]\n' +
-    'Jika tidak ada baris yang cocok, balas [].'
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Ekstraksi PDF + LLM
+// Ekstraksi teks PDF
 // ---------------------------------------------------------------------------
 
 /** Baca teks PDF memakai pdf-parse (worker diarahkan ke path absolut). */
@@ -251,52 +139,138 @@ export async function extractPdfText(buffer: Buffer): Promise<{ text: string; pa
   }
 }
 
+// ---------------------------------------------------------------------------
+// Parser deterministik LRA (tanpa AI)
+// ---------------------------------------------------------------------------
+
 /**
- * Ekstraksi item LRA dari teks PDF: potong per chunk lalu klasifikasikan
- * dengan LLM secara sekuensial (aman rate limit). Setiap entri divalidasi
- * menurut aturan BAS Permendagri (kode di luar struktur dibuang), lalu
- * hierarki dilengkapi (induk yang tidak tercetak diturunkan dari jumlah
- * anak-anaknya). Hasil dedupe per kode.
+ * Pola angka moneter/persen format Indonesia pada LRA:
+ * "10.000.000,00", "3.311.202.831,00", "0,00", "53,64", "1.234.567".
+ * Angka biasa tanpa koma desimal/pemisah ribuan (mis. "3" pada nama
+ * "Pajak Hotel Bintang 3") sengaja TIDAK cocok agar tidak terbaca nilai.
  */
-export async function extractLraItems(text: string): Promise<ExtractResult> {
-  const chunks = chunkText(text)
-  const merged = new Map<string, LraItem>()
+const NUMBER_RE = /\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?|\d+,\d{1,2}/g
+
+/** Baris data LRA: diawali kode rekening lalu uraian. */
+const CODE_LINE_RE = /^(\d[\d.]*)\s+(.*)$/
+
+/** Baris non-data yang dilewati (judul, kepala kolom, penanda halaman, dst). */
+function isNoiseLine(line: string): boolean {
+  if (!line) return true
+  if (line.startsWith('--') || /\bof\b\s*\d+\s*--$/.test(line)) return true // -- 1 of 2 --
+  if (/^kode\s+rekening/i.test(line)) return true
+  if (/^pemerintahan\b|^kab(upaten)?\.|^kecamatan\b|^provinsi\b/i.test(line)) return true
+  if (/^laporan\s+realisasi\b/i.test(line)) return true
+  if (/^tahun\s+anggaran\b/i.test(line)) return true
+  if (/^\d{1,2}\s+\w+\s+\d{4}\s+sampai/i.test(line)) return true // "01 Januari 2026 Sampai ..."
+  return false
+}
+
+/**
+ * Uraikan teks LRA menjadi baris rekening secara deterministik:
+ * - kode rekening di awal baris (bertitik/flat) + uraian + kolom angka
+ * - kolom ANGGARAN (tahun berjalan) dan REALISASI (tahun berjalan) adalah
+ *   dua angka pertama pada baris; kolom persen & realisasi tahun sebelumnya
+ *   diabaikan
+ * - uraian yang terlipat (wrap) ke baris berikut digabungkan
+ * - baris JUMLAH/subtotal dan judul dilewati
+ * Kode kemudian divalidasi normalizeKode (aturan BAS Permendagri).
+ */
+export function parseLraRows(text: string): {
+  rows: LraItem[]
+  dropped: number
+  droppedExamples: string[]
+} {
+  const lines = text.split(/\r?\n/).map((l) => l.trim())
+  const rows = new Map<string, LraItem>()
   let dropped = 0
   const droppedExamples: string[] = []
 
-  const zai = await ZAI.create()
-  for (const chunk of chunks) {
-    try {
-      const completion = await zai.chat.completions.create({
-        messages: [
-          { role: 'assistant', content: LLM_SYSTEM_PROMPT },
-          { role: 'user', content: buildChunkPrompt(chunk) },
-        ],
-        thinking: { type: 'disabled' },
-      })
-      const raw = completion.choices[0]?.message?.content ?? ''
-      for (const entry of parseLlmJsonArray(raw)) {
-        const item = normalizeItem(entry)
-        if (item) {
-          merged.set(item.code, item)
-        } else {
-          // Baris tidak sesuai struktur BAS Permendagri → dibuang
-          dropped += 1
-          const codeRaw = (entry as Record<string, unknown> | null)?.code
-          const codeStr =
-            typeof codeRaw === 'string' || typeof codeRaw === 'number' ? String(codeRaw) : ''
-          if (codeStr && droppedExamples.length < 5 && !droppedExamples.includes(codeStr)) {
-            droppedExamples.push(codeStr)
-          }
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    if (isNoiseLine(line)) continue
+
+    const m = CODE_LINE_RE.exec(line)
+    if (!m) continue
+    const codeRaw = m[1]
+
+    // Kumpulkan angka dari sisa baris, plus baris lanjutan bila nilai
+    // terlipat ke baris berikutnya (urungan nama / kolom angka terpisah).
+    let rest = m[2]
+    let nums = rest.match(NUMBER_RE) ?? []
+    let j = i
+    while (nums.length < 2 && j + 1 < lines.length) {
+      const next = lines[j + 1]
+      if (
+        isNoiseLine(next) ||
+        CODE_LINE_RE.test(next) ||
+        next.toUpperCase().startsWith('JUMLAH')
+      ) {
+        break
+      }
+      nums = nums.concat(next.match(NUMBER_RE) ?? [])
+      rest += ` ${next}`
+      j++
+    }
+    // Baris data tanpa nilai angka → bukan baris rekening LRA
+    if (nums.length < 2) {
+      i = j
+      continue
+    }
+
+    const anggaran = parseLooseNumber(nums[0])
+    const realisasi = parseLooseNumber(nums[1])
+    if (anggaran === null || realisasi === null || anggaran < 0) {
+      i = j
+      continue
+    }
+
+    // Nama rekening = teks sebelum angka pertama
+    let name = rest
+    const firstNum = rest.match(NUMBER_RE)
+    if (firstNum) {
+      const idx = rest.indexOf(firstNum[0])
+      if (idx >= 0) name = rest.slice(0, idx)
+    }
+    name = name.replace(/\s+/g, ' ').trim()
+
+    const normalized = normalizeKode(codeRaw)
+    if (!normalized) {
+      // Kode di luar struktur BAS — hanya hitung bila mirip kode LRA (4-9)
+      if (/^[4-9]/.test(codeRaw)) {
+        dropped += 1
+        if (droppedExamples.length < 5 && !droppedExamples.includes(codeRaw)) {
+          droppedExamples.push(codeRaw)
         }
       }
-    } catch (error) {
-      // Chunk gagal diproses → lewati, lanjut chunk berikutnya
-      console.error('Gagal memproses chunk LLM', error)
+      i = j
+      continue
     }
+
+    const stdName = standardNameFor(normalized.code)
+    if (stdName) name = stdName
+
+    rows.set(normalized.code, {
+      code: normalized.code,
+      name,
+      anggaran,
+      realisasi,
+      level: normalized.level,
+    })
+    i = j
   }
 
-  const base = [...merged.values()].sort((a, b) => a.code.localeCompare(b.code))
+  return { rows: [...rows.values()], dropped, droppedExamples }
+}
+
+/**
+ * Ekstraksi item LRA dari teks PDF secara deterministik (tanpa AI):
+ * parse baris rekening → validasi kode BAS → lengkapi hierarki
+ * (induk = jumlah anak). Hasil dedupe per kode.
+ */
+export async function extractLraItems(text: string): Promise<ExtractResult> {
+  const { rows, dropped, droppedExamples } = parseLraRows(text)
+  const base = [...rows].sort((a, b) => a.code.localeCompare(b.code))
   const { items, derived } = applyHierarchy(base)
   return { items, stats: { valid: base.length, dropped, derived, droppedExamples } }
 }

@@ -194,7 +194,7 @@ export function ImportLraPanel({ mode }: { mode: 'admin' | 'opd' }) {
           <p className="font-semibold text-foreground">Cara kerja fitur import</p>
           <ol className="mt-1 list-decimal space-y-0.5 pl-5">
             <li>Pilih OPD/SKPD tujuan{mode === 'opd' ? ' (otomatis: OPD Anda)' : ''} lalu unggah file PDF LRA (maks. 10 MB, harus berisi teks).</li>
-            <li>Sistem membaca teks PDF lalu mengekstrak &amp; memvalidasi kode rekening sesuai aturan Bagan Akun Standar (BAS) Permendagri 77/2020 dengan AI.</li>
+            <li>Sistem membaca teks PDF lalu mengekstrak &amp; memvalidasi kode rekening sesuai aturan Bagan Akun Standar (BAS) Permendagri 77/2020 secara otomatis.</li>
             <li>Tinjau hasil ekstraksi, pilih mode penyimpanan, lalu konfirmasi.</li>
           </ol>
           <p className="mt-1.5 text-xs text-muted-foreground">
@@ -285,7 +285,7 @@ export function ImportLraPanel({ mode }: { mode: 'admin' | 'opd' }) {
             <Loader2 className="mb-2 h-10 w-10 animate-spin text-[#17408b]" aria-hidden="true" />
             <p className="text-sm font-semibold text-foreground">Menganalisis PDF…</p>
             <p className="text-xs text-muted-foreground">
-              Ekstraksi teks + klasifikasi kode rekening dengan AI, mohon tunggu.
+              Membaca PDF &amp; mengklasifikasi kode rekening, mohon tunggu.
             </p>
           </>
         ) : (

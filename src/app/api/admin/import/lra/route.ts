@@ -73,7 +73,7 @@ export async function POST(req: Request) {
     }
 
     // Ekstraksi & klasifikasi kode rekening per level sesuai aturan BAS
-    // Permendagri (validasi kode, hierarki lengkap) dengan LLM per chunk
+    // Permendagri secara deterministik (parser baris, tanpa AI)
     const { items, stats } = await extractLraItems(text)
 
     const opd = opdId ? await db.opd.findUnique({ where: { id: opdId } }) : null
