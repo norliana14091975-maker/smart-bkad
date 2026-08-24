@@ -32,6 +32,8 @@ export interface RealisasiAkunDto {
 
 export interface RealisasiSkpdDto {
   name: string
+  /** ID OPD terdaftar dengan nama sama (untuk drill-down rincian akun) */
+  opdId?: number | null
   pendapatan: { anggaran: number; realisasi: number }
   belanja: { anggaran: number; realisasi: number }
   pembiayaan: { anggaran: number; realisasi: number }

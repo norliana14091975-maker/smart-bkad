@@ -295,7 +295,7 @@ export function OpdDashboardSection() {
         </h3>
         <p className="mb-3 text-xs text-muted-foreground">
           Kode rekening hasil import diklasifikasi per level: L1 Akun · L2 Kelompok · L3 Jenis ·
-          L4 Obyek · L5 Rincian Obyek.
+          L4 Obyek · L5 Rincian Obyek · L6 Sub Rincian Obyek.
         </p>
 
         {akunQuery.isLoading ? (

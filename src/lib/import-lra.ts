@@ -10,7 +10,7 @@ import { applyHierarchy, normalizeKode, standardNameFor } from '@/lib/kode-akun'
 
 export const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
 export const MIN_TEXT_LENGTH = 50 // lebih pendek dari ini dianggap PDF hasil scan
-const CHUNK_SIZE = 15000 // ±15.000 karakter per chunk untuk LLM
+const CHUNK_SIZE = 8000 // ±8.000 karakter per chunk agar keluaran LLM aman dari batas token
 
 /** Item LRA hasil ekstraksi, sudah diklasifikasi per level kode. */
 export interface LraItem {
@@ -116,7 +116,12 @@ function normalizeItem(entry: unknown): LraItem | null {
   return { code: normalized.code, name, anggaran, realisasi, level: normalized.level }
 }
 
-/** Parse jawaban LLM secara tangguh: buang code fence lalu ambil array JSON. */
+/**
+ * Parse jawaban LLM secara tangguh: buang code fence lalu ambil array JSON.
+ * Respons LLM dapat terpotong oleh batas token sehingga array tidak tertutup;
+ * pada kasus itu pulihkan dengan membaca setiap objek {...} yang utuh satu
+ * per satu sehingga item sebelum titik potong tetap terselamatkan.
+ */
 function parseLlmJsonArray(raw: string): unknown[] {
   if (!raw) return []
 
@@ -127,15 +132,31 @@ function parseLlmJsonArray(raw: string): unknown[] {
     .trim()
 
   const start = s.indexOf('[')
+  if (start === -1) return []
   const end = s.lastIndexOf(']')
-  if (start === -1 || end === -1 || end <= start) return []
 
-  try {
-    const parsed: unknown = JSON.parse(s.slice(start, end + 1))
-    return Array.isArray(parsed) ? parsed : []
-  } catch {
-    return []
+  // 1) Coba parse array utuh terlebih dahulu
+  if (end > start) {
+    try {
+      const parsed: unknown = JSON.parse(s.slice(start, end + 1))
+      if (Array.isArray(parsed)) return parsed
+    } catch {
+      // lanjut ke pemulihan objek per objek
+    }
   }
+
+  // 2) Pemulihan respons terpotong: objek LRA datar tanpa braket bersarang
+  const items: unknown[] = []
+  const body = s.slice(start)
+  const objectRe = /\{[^{}]*\}/g
+  for (const match of body.matchAll(objectRe)) {
+    try {
+      items.push(JSON.parse(match[0]))
+    } catch {
+      // lewati objek rusak
+    }
+  }
+  return items
 }
 
 /** Potong teks menjadi chunk pada batas baris agar baris tabel tidak terbelah. */
@@ -182,19 +203,25 @@ function buildChunkPrompt(chunk: string): string {
     '- level kelompok: "4.1" s.d. "4.3", "5.1" s.d. "5.4", "6.1"-"6.2"\n' +
     '- level jenis: "4.1.01", "5.1.02"\n' +
     '- level obyek: "4.1.01.01", "5.1.02.01"\n' +
-    '- level rincian obyek (3 digit terakhir): "4.1.01.01.001", "5.1.01.01.001"\n' +
+    '- level rincian obyek (3 digit): "4.1.01.01.001", "5.1.01.01.001"\n' +
+    '- level sub rincian obyek (5 digit tambahan): "4.1.02.03.007.00001", "5.1.01.01.001.00001"\n' +
     'Kode boleh tertulis tanpa titik (mis. "4102" artinya 4.1.02) — salin persis seperti di teks.\n' +
+    'KOLOM ANGKA: "anggaran" = kolom ANGGARAN 2026 (tahun berjalan), "realisasi" = kolom ' +
+    'REALISASI 2026. JANGAN memakai kolom REALISASI tahun sebelumnya (mis. REALISASI 2025) ' +
+    'atau kolom persentase.\n' +
     'Untuk setiap baris kumpulkan: "code" (kode rekening persis seperti di teks), ' +
     '"name" (uraian/nama rekening), "anggaran" (nilai anggaran), dan "realisasi" (nilai realisasi).\n' +
     'Aturan:\n' +
-    '1. Ubah format angka Indonesia (titik pemisah ribuan, koma desimal, contoh ' +
-    '"49.898.218.773.411,00") menjadi angka polos (49898218773411).\n' +
+    '1. "anggaran" dan "realisasi" WAJIB berupa STRING yang disalin PERSIS dari teks, ' +
+    'termasuk titik dan koma apa adanya — JANGAN mengubahnya menjadi angka dan jangan ' +
+    'menghitung ulang jumlah nolnya (contoh teks "10.000.000,00" ditulis ' +
+    '"anggaran":"10.000.000,00").\n' +
     '2. Nilai kosong, strip, atau tidak ada dianggap 0. Realisasi negatif ditulis angka minus.\n' +
     '3. Lewati kepala kolom, baris JUMLAH/subtotal, dan baris tanpa kode rekening.\n' +
     '4. Jangan mengarang data — hanya baris yang benar-benar ada pada teks.\n\n' +
     'Balas HANYA array JSON valid tanpa penjelasan dan tanpa blok kode, contoh:\n' +
-    '[{"code":"4","name":"PENDAPATAN DAERAH","anggaran":71450673065697,"realisasi":45000000000000},\n' +
-    '{"code":"4.1.01.01.001","name":"Pajak Hotel Bintang 3","anggaran":3000000000000,"realisasi":1800000000000}]\n' +
+    '[{"code":"4","name":"PENDAPATAN DAERAH","anggaran":"71.450.673.065.697,00","realisasi":"45.000.000.000.000,00"},\n' +
+    '{"code":"4.1.01.01.001","name":"Pajak Hotel Bintang 3","anggaran":"3.000.000.000.000,00","realisasi":"1.800.000.000.000,00"}]\n' +
     'Jika tidak ada baris yang cocok, balas [].'
   )
 }

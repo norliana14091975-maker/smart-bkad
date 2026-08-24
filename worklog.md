@@ -179,3 +179,23 @@ Work Log:
 
 Stage Summary:
 - Rule import LRA kini sepenuhnya mengikuti peraturan berlaku (BAS Permendagri 77/2020): kode tervalidasi & dinormalisasi (flat/titik, rincian 3 digit + warisan 2 digit), nama akun/kelompok memakai nomenklatur baku, baris non-BAS otomatis dibuang (dilaporkan), hierarki dijamin konsisten (induk hilang diturunkan dari jumlah anak, nilai induk tercetak dipertahankan), realisasi negatif (koreksi) didukung, dan ringkasan SKPD/publik mengikuti total LRA tanpa double-count
+
+---
+Task ID: 8
+Agent: Z.ai Code (main)
+Task: Fitur detail (drill-down) Realisasi Per-SKPD + import data kecamatan dari LRA asli yang diunggah user (semua otomatis mengikuti LRA)
+
+Work Log:
+- Analisa PDF upload/lra-kecamatan-suling-tambun-kab-seruyan.pdf (2 halaman, ~12.200 char, LRA Kecamatan Suling Tambun Kab. Seruyan TA 2026 s.d. 31 Juli) — ditemukan kode level 6 sub rincian obyek SIPD (contoh 4.1.02.03.007.00001) yang belum didukung
+- Rule BAS diperluas (src/lib/kode-akun.ts): LEVEL 6 'Sub Rincian Obyek' (5 digit, total 14 digit baku / 13 warisan); VALID_DIGIT_LENGTHS + 13/14; pemetaan segmen 1-1-2-2-(3|2)-(5) dgn branch eksplisit per panjang (uji unit 6/6 + regresi lulus)
+- Dua perbaikan kualitas ekstraksi (src/lib/import-lra.ts):
+  1. Respons LLM terpotong batas token (JSON tanpa penutup → parse gagal total, 0 item): parseLlmJsonArray kini memulihkan objek-per-objek via regex {..} datar; CHUNK_SIZE 15000→8000
+  2. LLM salah menstranskrip angka ("10.000.000,00" dibaca 100jt): prompt kini mewajibkan anggaran/realisasi sebagai STRING salinan persis dari teks (konversi dilakukan parseLooseNumber deterministik); kolom angka diperjelas (ANGGARAN 2026 vs REALISASI 2026, bukan kolom 2025/persen)
+- Rekonsiliasi hierarki matematis LRA (applyHierarchy): induk yang punya anak langsung SELALU dihitung ulang = jumlah anak (bottom-up level 6→1); induk hilang tetap dibuat otomatis dgn nomenklatur baku — menjamin konsistensi penuh "semua mengikuti LRA"
+- Import data kecamatan: OPD "KEC-ST KECAMATAN SULING TAMBUN" dibuat (akun kecamatan-suling-tambun / Opd-yy2NpMRqgj); LRA diimport scope OPD tsb → hasil final: 99 baris terbaca valid + 10 induk dibuat = 109 baris tersimpan; verifikasi nilai persis LRA (4=10.000.000/0; 5=2.863.067.683/1.535.789.825; 5.1.01=2.205.719.003/1.143.932.325; 5.1.01.01.001.00001=677.600.000/434.109.300; 5.1.02.04.001.00003=115.994.000/75.396.600); ringkasan SKPD otomatis mengikuti (pendapatan 10jt/0, belanja 2,86M/1,54M, pembiayaan 0/0)
+- Fitur detail drill-down: GET /api/realisasi/skpd kini menyertakan opdId (map nama SKPD → OPD); RealisasiSkpdDto + opdId; komponen baru skpd-detail-dialog.tsx — baris SKPD dgn OPD jadi klik-able (hover, kursor, badge "RINCIAN"), dialog menampilkan rincian per-akun hierarkis L1-L6 (grup Pendapatan/Belanja/Pembiayaan, badge level, indentasi, %, scroll) + empty-state bila belum ada import; layout diperbaiki (max-w-5xl, overflow-auto, kode shrink-0) — terverifikasi visual FIXED
+- Teks UI diperbarui ke L1-L6 (panel import, dialog detail, dashboard OPD)
+- Verifikasi: login OPD kecamatan sukses + /api/opd/me menampilkan realisasi LRA; baris SKPD tanpa OPD tidak klik-able & tanpa badge; browser: klik baris KECAMATAN SULING TAMBUN → dialog 109 baris (6 pendapatan + 103 belanja), nilai benar; tanpa error console; lint bersih
+
+Stage Summary:
+- Realisasi Per-SKPD kini interaktif: klik baris ber-badge RINCIAN membuka rincian per-akun hierarkis L1-L6 dari LRA; data kecamatan asli (Suling Tambun) terimport penuh dgn rule BAS level 6 + rekonsiliasi matematis (induk=jumlah anak) + anti-salah-baca angka (string-copy) + pemulihan respons LLM terpotong; kredensial OPD kecamatan: kecamatan-suling-tambun / Opd-yy2NpMRqgj

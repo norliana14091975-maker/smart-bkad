@@ -3,14 +3,19 @@
  * No. 77 Tahun 2020 tentang Pedoman Teknis Pengelolaan Keuangan Daerah:
  *
  * Struktur kode rekening (level):
- * - Level 1: kode akun          — 1 digit  (4 Pendapatan, 5 Belanja, 6 Pembiayaan)
- * - Level 2: kode kelompok      — 2 digit  (contoh 4.1)
- * - Level 3: kode jenis         — 4 digit  (contoh 4.1.01)
- * - Level 4: kode obyek         — 6 digit  (contoh 4.1.01.01)
- * - Level 5: kode rincian obyek — 9 digit  (contoh 4.1.01.01.001)
+ * - Level 1: kode akun              — 1 digit   (4 Pendapatan, 5 Belanja, 6 Pembiayaan)
+ * - Level 2: kode kelompok          — 2 digit   (contoh 4.1)
+ * - Level 3: kode jenis             — 4 digit   (contoh 4.1.01)
+ * - Level 4: kode obyek             — 6 digit   (contoh 4.1.01.01)
+ * - Level 5: kode rincian obyek     — 9 digit   (contoh 4.1.01.01.001)
+ * - Level 6: kode sub rincian obyek — 14 digit  (contoh 4.1.01.01.001.00001)
  *
- * Sebagian LRA warisan menulis rincian obyek dengan 2 digit terakhir
- * (contoh 4.1.01.01.01); format tersebut tetap diterima sebagai level 5.
+ * Catatan kompatibilitas data riil (LRA SIPD):
+ * - Rincian obyek warisan 2 digit (contoh 4.1.01.01.01 = 8 digit) tetap
+ *   diterima sebagai level 5.
+ * - Sub rincian obyek 5 digit (contoh .00001) mengikuti rincian 3 digit
+ *   (total 14 digit) maupun warisan 2 digit (total 13 digit) — keduanya
+ *   diterima sebagai level 6.
  */
 
 export const LEVEL_LABELS: Record<number, string> = {
@@ -19,6 +24,7 @@ export const LEVEL_LABELS: Record<number, string> = {
   3: 'Jenis',
   4: 'Obyek',
   5: 'Rincian Obyek',
+  6: 'Sub Rincian Obyek',
 }
 
 /** Label singkat untuk badge, mis. "L3 · Jenis". */
@@ -69,7 +75,7 @@ const VALID_KELOMPOK: Record<string, string[]> = {
  * 1=akun, 2=kelompok, 4=jenis, 6=obyek, 9=rincian obyek (3 digit),
  * 8=rincian obyek warisan (2 digit).
  */
-const VALID_DIGIT_LENGTHS = [1, 2, 4, 6, 8, 9]
+const VALID_DIGIT_LENGTHS = [1, 2, 4, 6, 8, 9, 13, 14]
 
 export interface NormalizedKode {
   code: string
@@ -101,14 +107,33 @@ export function normalizeKode(raw: string): NormalizedKode | null {
   // Kelompok harus sesuai nomenklatur BAS
   if (len >= 2 && !VALID_KELOMPOK[akun].includes(digits[1])) return null
 
-  const level = len === 1 ? 1 : len === 2 ? 2 : len === 4 ? 3 : len === 6 ? 4 : 5
+  const level =
+    len === 1
+      ? 1
+      : len === 2
+        ? 2
+        : len === 4
+          ? 3
+          : len === 6
+            ? 4
+            : len === 13 || len === 14
+              ? 6
+              : 5
 
-  // Susun bentuk kanonik bertitik sesuai struktur 1-1-2-2-(2|3)
+  // Susun bentuk kanonik bertitik sesuai struktur 1-1-2-2-(2|3)-(5)
   const segs: string[] = [digits[0]]
   if (len >= 2) segs.push(digits[1])
   if (len >= 4) segs.push(digits.slice(2, 4))
   if (len >= 6) segs.push(digits.slice(4, 6))
-  if (len >= 8) segs.push(digits.slice(6, len))
+  if (len === 9 || len === 14) {
+    // baku: rincian obyek 3 digit (+ sub rincian 5 digit)
+    segs.push(digits.slice(6, 9))
+    if (len === 14) segs.push(digits.slice(9, 14))
+  } else if (len === 8 || len === 13) {
+    // varian warisan: rincian obyek 2 digit (+ sub rincian 5 digit)
+    segs.push(digits.slice(6, 8))
+    if (len === 13) segs.push(digits.slice(8, 13))
+  }
 
   return { code: segs.join('.'), level }
 }
@@ -131,53 +156,45 @@ export function prefixOf(code: string): string {
 }
 
 /**
- * Lengkapi hierarki sesuai struktur LRA: setiap baris level >= 2 harus
- * memiliki induk. Induk yang tidak tercetak pada PDF diturunkan dari
- * penjumlahan anak langsungnya (bottom-up); nilai induk hasil turunan
- * selalu dihitung ulang bila anak baru ditemukan, sedangkan nilai induk
- * yang memang tercetak pada LRA dipertahankan apa adanya.
+ * Lengkapi & rekonsiliasi hierarki sesuai struktur LRA:
+ * 1. Setiap baris level >= 2 harus memiliki induk — induk yang tidak
+ *    tercetak pada PDF dibuat (ditandai "derived") dengan nomenklatur baku.
+ * 2. Rekonsiliasi bottom-up (matematika LRA): setiap induk yang memiliki
+ *    anak langsung bernilai jumlah anak langsungnya. Pada LRA SIPD yang sah,
+ *    induk memang selalu = jumlah anak, sehingga aturan ini menjaga
+ *    konsistensi penuh dan menetralkan salah baca satu baris induk.
  */
 export function applyHierarchy(items: KodeItem[]): { items: KodeItem[]; derived: number } {
   const map = new Map<string, KodeItem>()
   for (const it of items) map.set(it.code, { ...it })
   const derivedSet = new Set<string>()
 
-  const ensureAncestors = (code: string, level: number): void => {
-    if (level <= 1) return
-    const parentCode = prefixOf(code)
-    if (!parentCode) return
-
-    const existing = map.get(parentCode)
-    if (!existing || derivedSet.has(parentCode)) {
-      // Anak langsung induk = baris pada level `level` dengan prefix tersebut
-      const children = [...map.values()].filter(
-        (it) => it.level === level && it.code.startsWith(`${parentCode}.`)
-      )
-      if (children.length > 0) {
-        const anggaran = children.reduce((a, c) => a + c.anggaran, 0)
-        const realisasi = children.reduce((a, c) => a + c.realisasi, 0)
-        if (!existing) {
-          map.set(parentCode, {
-            code: parentCode,
-            name: standardNameFor(parentCode) ?? '',
-            level: level - 1,
-            anggaran,
-            realisasi,
-          })
-          derivedSet.add(parentCode)
-        } else {
-          existing.anggaran = anggaran
-          existing.realisasi = realisasi
-        }
-      }
+  // 1) Buat induk yang hilang dari level terdalam ke atas
+  for (let lvl = 6; lvl >= 2; lvl--) {
+    for (const it of [...map.values()]) {
+      if (it.level !== lvl) continue
+      const parentCode = prefixOf(it.code)
+      if (!parentCode || map.has(parentCode)) continue
+      map.set(parentCode, {
+        code: parentCode,
+        name: standardNameFor(parentCode) ?? '',
+        level: lvl - 1,
+        anggaran: 0,
+        realisasi: 0,
+      })
+      derivedSet.add(parentCode)
     }
-    ensureAncestors(parentCode, level - 1)
   }
 
-  // Proses dari level terdalam ke atas agar agregat induk selalu lengkap
-  for (let lvl = 5; lvl >= 2; lvl--) {
+  // 2) Rekonsiliasi bottom-up: induk = jumlah anak langsung (bila ada anak)
+  for (let lvl = 6; lvl >= 1; lvl--) {
     for (const it of [...map.values()]) {
-      if (it.level === lvl) ensureAncestors(it.code, lvl)
+      if (it.level !== lvl) continue
+      const children = [...map.values()].filter((c) => prefixOf(c.code) === it.code)
+      if (children.length > 0) {
+        it.anggaran = children.reduce((a, c) => a + c.anggaran, 0)
+        it.realisasi = children.reduce((a, c) => a + c.realisasi, 0)
+      }
     }
   }
 

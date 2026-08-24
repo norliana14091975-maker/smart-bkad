@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/table'
 import { SectionHeading } from '@/components/dashboard/section-heading'
 import { useToday } from '@/hooks/use-today'
+import { SkpdDetailDialog } from '@/components/dashboard/sections/skpd-detail-dialog'
 import { formatDateFromISO, formatRupiah0 } from '@/lib/format'
 import type { RealisasiSkpdDto } from '@/types/budget'
 
@@ -47,6 +48,9 @@ export function RealisasiSkpdSection() {
     queryKey: ['realisasi-skpd', applied],
     queryFn: () => fetchSkpd(applied),
   })
+
+  // SKPD yang sedang dibuka dialog rinciannya (drill-down per-akun)
+  const [detail, setDetail] = useState<{ name: string; opdId: number | null } | null>(null)
 
   const totals = useMemo(() => {
     const t = { pendAng: 0, pendReal: 0, belAng: 0, belReal: 0, pemAng: 0, pemReal: 0 }
@@ -173,9 +177,28 @@ export function RealisasiSkpdSection() {
               ))
             ) : data && data.length > 0 ? (
               data.map((d, idx) => (
-                <TableRow key={d.name} className="text-xs sm:text-[13px]">
+                <TableRow
+                  key={d.name}
+                  className={`text-xs transition-colors sm:text-[13px] ${
+                    d.opdId ? 'cursor-pointer hover:bg-muted/60' : ''
+                  }`}
+                  onClick={() => d.opdId && setDetail({ name: d.name, opdId: d.opdId })}
+                  title={d.opdId ? 'Klik untuk melihat rincian realisasi per-akun' : undefined}
+                >
                   <TableCell className="text-center text-muted-foreground">{idx + 1}</TableCell>
-                  <TableCell className="font-medium">{d.name}</TableCell>
+                  <TableCell className="font-medium">
+                    <span className="inline-flex items-center gap-1.5">
+                      {d.name}
+                      {d.opdId && (
+                        <span
+                          className="rounded bg-[#17408b]/10 px-1 py-0.5 font-mono text-[9px] font-bold text-[#17408b]"
+                          title="Rincian tersedia"
+                        >
+                          RINCIAN
+                        </span>
+                      )}
+                    </span>
+                  </TableCell>
                   <TableCell className="text-right tabular-nums">{formatRupiah0(d.pendapatan.anggaran)}</TableCell>
                   <TableCell className="text-right tabular-nums">{formatRupiah0(d.pendapatan.realisasi)}</TableCell>
                   <TableCell className="text-right tabular-nums">{formatRupiah0(d.belanja.anggaran)}</TableCell>
@@ -205,6 +228,15 @@ export function RealisasiSkpdSection() {
           </TableBody>
         </Table>
       </div>
+
+      {/* Dialog rincian per-akun (drill-down) */}
+      {detail && (
+        <SkpdDetailDialog
+          skpdName={detail.name}
+          opdId={detail.opdId}
+          onClose={() => setDetail(null)}
+        />
+      )}
     </div>
   )
 }

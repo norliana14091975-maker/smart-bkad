@@ -197,9 +197,10 @@ export function ImportLraPanel({ mode }: { mode: 'admin' | 'opd' }) {
             Struktur kode rekening sesuai Permendagri: <strong>L1 Akun</strong> (4) ·{' '}
             <strong>L2 Kelompok</strong> (4.1) · <strong>L3 Jenis</strong> (4.1.01) ·{' '}
             <strong>L4 Obyek</strong> (4.1.01.01) · <strong>L5 Rincian Obyek</strong>{' '}
-            (4.1.01.01.001). Kode di luar struktur BAS otomatis dibuang; nama akun &amp;
-            kelompok dinormalkan ke nomenklatur baku; level induk yang tidak tercetak
-            diturunkan dari penjumlahan level anaknya sesuai struktur LRA.
+            (4.1.01.01.001) · <strong>L6 Sub Rincian Obyek</strong> (4.1.01.01.001.00001).{' '}
+            Kode di luar struktur BAS otomatis dibuang; nama akun &amp; kelompok dinormalkan
+            ke nomenklatur baku; nilai induk dihitung ulang dari jumlah anaknya (rekonsiliasi
+            matematis struktur LRA).
           </p>
         </div>
       </div>
