@@ -136,3 +136,22 @@ Work Log:
 
 Stage Summary:
 - Fitur lengkap: admin input OPD/SKPD → akun login dibuat otomatis (username slug dari nama, password acak ditampilkan sekali dengan tombol salin); manajemen akun (reset password, aktif/nonaktif dengan logout paksa, hapus); OPD login ke dashboard sendiri (profil + editor realisasi anggaran/realisasi yang langsung tampil di dashboard publik Per-SKPD); isolasi role ketat dua arah
+
+---
+Task ID: 6
+Agent: Z.ai Code (main)
+Task: Klasifikasi kode akun level 1-5 pada import LRA + import per OPD/SKPD (admin pilih OPD, user OPD auto-scope)
+
+Work Log:
+- Prisma: RealisasiAkun + level (1-5), scope ('global'|'opd:<id>'), opdId (cascade); ImportLog + opdId (SetNull); relasi Opd.realisasiAkun/importLogs; unique compound (code, scope) menggantikan code unik; db:push + restart server (orphan process)
+- src/lib/kode-akun.ts: codeLevel() (jumlah segmen kode), LEVEL_LABELS (1 Akun, 2 Kelompok, 3 Jenis, 4 Obyek, 5 Rincian Obyek), levelBadge()
+- src/lib/import-lra.ts (baru, refaktor dari route): parseLooseNumber/normalizeItem(+level)/parseLlmJsonArray/chunkText; prompt LLM diperbarui agar mengekstrak SEMUA level 1-5 segmen (4, 4.1, 4.1.01, 4.1.01.01, 4.1.01.01.01); extractPdfText (worker fix), extractLraItems, scopeFor(), groupFromCode(), sumByPrefix() (jumlahkan pada level terendah agar hierarki tidak dobel), confirmLra() (replace=deleteMany scope, append=upsert code_scope; scope OPD → upsert RealisasiSkpd dari total per kelompok: 4/5/6.1-preferensi)
+- Routes: admin import lra (formData opdId opsional→validasi OPD, log+opdId) / confirm (validasi log ada; opdId dari body) / logs (+opdName); BARU opd/import/lra (auto-scope OPD login, cek aktif) / confirm (log harus milik OPD tsb) / logs (hanya miliknya); public /api/realisasi/akun: ?opdId=N filter scope, tanpa param → agregat lintas OPD per kode (sum) bila ada baris OPD, else global; summary pakai sumByPrefix level terendah; admin realisasi-akun: +level+opdName (GET/PUT/DELETE)
+- Types: RealisasiAkunDto/RowDto +level(+opdName), ImportItemDto +level, ImportParseResultDto +opdId/opdName, ImportLogDto +opdName
+- Frontend: import-lra-panel.tsx (panel bersama mode admin|opd: selector OPD tujuan utk admin dgn opsi "Konsolidasi — seluruh OPD", label auto-scope utk OPD; preview tabel + kolom Level badge L1-L5 + indentasi per level; badge OPD target; radio mode; riwayat + kolom OPD); admin-import-section & opd-import-section jadi wrapper; sidebar: menu "Import LRA (PDF)" di grup Area OPD; page.tsx: SECTION_META + OPD_SECTIONS + render; realisasi-akun-section publik: badge level + indentasi; admin-realisasi-section: kolom Level + OPD; opd-dashboard-section: tabel "Rincian Realisasi Per-Akun OPD Ini" (3 kelompok, badge level, indentasi) + empty state arahkan ke import
+- scripts/make-test-lra.ts: PDF uji hierarkis 21 baris level 1-5 (kode 4 s.d. 4.1.01.01.01, 5.x, 6.x dgn format angka Indonesia)
+- Uji curl: admin import utk OPD-001 → 21 item, distribusi level {1:3, 2:6, 3:8, 4:2, 5:2}, angka akurat; confirm replace scope opd:1 → 21 baris; RealisasiSkpd DINAS KESEHATAN otomatis = L1 pendapatan 71,45T/45T, belanja 74,28T/42T, pembiayaan 6.1 9,87T/3T; OPD login → import sendiri auto-scope DINAS KESEHATAN; OPD inject opdId lain diabaikan server; confirm dgn logId palsu/log OPD lain → 400; OPD akses route admin → 401; publik tanpa param → agregat baris OPD (21 baris level 1-5)
+- Uji browser: admin pilih OPD di selector → upload → preview 21 baris dgn badge L1-L5 + "OPD: DINAS KESEHATAN" → konfirmasi → log "Tersimpan" + nama OPD; login OPD → Dashboard OPD menampilkan tabel rincian per-akun berjenjang; Area OPD → Import LRA dgn label "otomatis tersimpan untuk OPD Anda: DINAS KESEHATAN" → upload+konfirmasi sukses; dashboard publik Realisasi Per-Akun menampilkan hierarki L1-L5; tanpa error console; lint bersih; seed di-restore
+
+Stage Summary:
+- Import LRA kini mengklasifikasi kode rekening otomatis per level Permendagri (L1 akun … L5 rincian obyek, tampil sbg badge + indentasi hierarkis) dan mendukung import per OPD/SKPD: admin memilih OPD tujuan (atau konsolidasi global), akun OPD otomatis terikat OPD-nya (isolasi ketat: scope dipaksa server, validasi log milik OPD); hasil import OPD otomatis memperbarui ringkasan SKPD di dashboard publik; agregasi publik menjumlahkan lintas OPD per kode pada level terendah agar tidak dobel hitung

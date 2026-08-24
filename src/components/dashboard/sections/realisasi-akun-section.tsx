@@ -14,7 +14,9 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { SectionHeading } from '@/components/dashboard/section-heading'
+import { Badge } from '@/components/ui/badge'
 import { useToday } from '@/hooks/use-today'
+import { levelBadge } from '@/lib/kode-akun'
 import { formatDateFromISO, formatPct, formatRupiah, formatTriliun } from '@/lib/format'
 import type { RealisasiAkunDto } from '@/types/budget'
 
@@ -153,8 +155,23 @@ export function RealisasiAkunSection() {
                   <TableRow key={item.code}>
                     <TableCell className="text-center text-muted-foreground">{idx + 1}</TableCell>
                     <TableCell className="font-medium">
-                      <span className="text-muted-foreground">{item.code} / </span>
-                      {item.name}
+                      <div
+                        className="flex items-baseline gap-2"
+                        style={{ paddingLeft: `${(item.level - 1) * 14}px` }}
+                      >
+                        <Badge
+                          variant="secondary"
+                          className={`shrink-0 whitespace-nowrap font-mono text-[10px] ${
+                            item.level <= 2 ? 'bg-[#17408b]/10 text-[#17408b]' : 'bg-muted'
+                          }`}
+                        >
+                          {levelBadge(item.level)}
+                        </Badge>
+                        <span>
+                          <span className="text-muted-foreground">{item.code} / </span>
+                          {item.name}
+                        </span>
+                      </div>
                     </TableCell>
                     <TableCell className="text-right tabular-nums">{formatRupiah(item.anggaran)}</TableCell>
                     <TableCell className="text-right tabular-nums">{formatRupiah(item.realisasi)}</TableCell>

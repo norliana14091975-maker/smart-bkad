@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { requireAdmin, unauthorized } from '@/lib/auth'
+import { getAdminUser, unauthorized } from '@/lib/auth'
 
-/** Riwayat import LRA seluruh OPD + konsolidasi (admin). */
+/** Riwayat import LRA milik OPD yang sedang login saja. */
 export async function GET() {
   try {
-    const admin = await requireAdmin()
-    if (!admin) return unauthorized()
+    const user = await getAdminUser()
+    if (!user || user.role !== 'opd' || !user.opdId) return unauthorized()
 
     const logs = await db.importLog.findMany({
+      where: { opdId: user.opdId },
       include: { opd: { select: { name: true } } },
       orderBy: { id: 'desc' },
     })
@@ -24,7 +25,7 @@ export async function GET() {
     }))
     return NextResponse.json({ data })
   } catch (error) {
-    console.error('GET /api/admin/import/logs error', error)
+    console.error('GET /api/opd/import/logs error', error)
     return NextResponse.json({ error: 'Gagal memuat riwayat import' }, { status: 500 })
   }
 }

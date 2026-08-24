@@ -36,15 +36,23 @@ model BudgetItem {
   @@map("budget_item")
 }
 
-// Realisasi anggaran per akun (tahun berjalan)
+// Realisasi anggaran per akun (tahun berjalan).
+// level 1-5 mengikuti struktur kode rekening Permendagri:
+// 1=akun, 2=kelompok, 3=jenis, 4=obyek, 5=rincian obyek.
+// scope 'global' = konsolidasi, 'opd:<id>' = realisasi milik OPD tersebut.
 model RealisasiAkun {
   id        Int    @id @default(autoincrement())
-  code      String @unique
+  code      String
   name      String
   group     String
+  level     Int    @default(3)
+  scope     String @default("global")
+  opdId     Int?
+  opd       Opd?   @relation(fields: [opdId], references: [id], onDelete: Cascade)
   anggaran  Float
   realisasi Float
 
+  @@unique([code, scope])
   @@map("realisasi_akun")
 }
 
@@ -84,12 +92,14 @@ model VisitorCounter {
 
 // Master Data OPD/SKPD — saat dibuat otomatis menghasilkan akun login OPD
 model Opd {
-  id        Int        @id @default(autoincrement())
-  code      String     @unique
-  name      String     @unique
-  active    Boolean    @default(true)
-  createdAt DateTime   @default(now())
-  user      AdminUser?
+  id            Int             @id @default(autoincrement())
+  code          String          @unique
+  name          String          @unique
+  active        Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  user          AdminUser?
+  realisasiAkun RealisasiAkun[]
+  importLogs    ImportLog[]
 
   @@map("opd")
 }
@@ -119,7 +129,7 @@ model AdminSession {
   @@map("admin_session")
 }
 
-// Riwayat import LRA dari PDF
+// Riwayat import LRA dari PDF (per OPD atau konsolidasi)
 model ImportLog {
   id        Int      @id @default(autoincrement())
   filename  String
@@ -127,6 +137,8 @@ model ImportLog {
   records   Int      @default(0)
   status    String   @default("parsed") // parsed | confirmed | failed
   message   String?
+  opdId     Int?
+  opd       Opd?     @relation(fields: [opdId], references: [id], onDelete: SetNull)
   createdAt DateTime @default(now())
 
   @@map("import_log")

@@ -9,8 +9,17 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
-import { formatPct, formatRupiah0 } from '@/lib/format'
-import type { OpdSelfDto } from '@/types/budget'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import { levelBadge } from '@/lib/kode-akun'
+import { formatPct, formatRupiah, formatRupiah0 } from '@/lib/format'
+import type { OpdSelfDto, RealisasiAkunDto } from '@/types/budget'
 
 async function fetchSelf(): Promise<OpdSelfDto> {
   const res = await fetch('/api/opd/me')
@@ -35,12 +44,31 @@ const EMPTY_FORM: FormState = {
   pembiayaan: { anggaran: '0', realisasi: '0' },
 }
 
+const AKUN_GROUPS: { key: string; label: string }[] = [
+  { key: 'PENDAPATAN', label: 'Realisasi Pendapatan' },
+  { key: 'BELANJA', label: 'Realisasi Belanja' },
+  { key: 'PEMBIAYAAN', label: 'Realisasi Pembiayaan' },
+]
+
 export function OpdDashboardSection() {
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const { data, isLoading, isError } = useQuery({
     queryKey: ['opd-me'],
     queryFn: fetchSelf,
+  })
+
+  const opdId = data?.opd.id ?? null
+
+  // Rincian realisasi akun milik OPD ini (hasil import LRA)
+  const akunQuery = useQuery({
+    queryKey: ['opd-realisasi-akun', opdId],
+    queryFn: async (): Promise<RealisasiAkunDto[]> => {
+      const res = await fetch(`/api/realisasi/akun?opdId=${opdId}`)
+      if (!res.ok) throw new Error('Gagal memuat rincian akun')
+      return ((await res.json()) as { data: RealisasiAkunDto[] }).data
+    },
+    enabled: opdId !== null,
   })
 
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
@@ -257,6 +285,83 @@ export function OpdDashboardSection() {
             {saving ? 'Menyimpan…' : 'Simpan Realisasi'}
           </Button>
         </div>
+      </section>
+
+      {/* Rincian realisasi per akun (hasil import LRA, klasifikasi level 1-5) */}
+      <section className="mt-5">
+        <h3 className="mb-1 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-foreground/80">
+          <BadgeCheck className="h-4 w-4 text-[#17408b]" aria-hidden="true" />
+          Rincian Realisasi Per-Akun OPD Ini
+        </h3>
+        <p className="mb-3 text-xs text-muted-foreground">
+          Kode rekening hasil import diklasifikasi per level: L1 Akun · L2 Kelompok · L3 Jenis ·
+          L4 Obyek · L5 Rincian Obyek.
+        </p>
+
+        {akunQuery.isLoading ? (
+          <Skeleton className="h-24 w-full" />
+        ) : akunQuery.data && akunQuery.data.length > 0 ? (
+          AKUN_GROUPS.map((g) => {
+            const rows = akunQuery.data.filter((r) => r.group === g.key)
+            if (rows.length === 0) return null
+            return (
+              <div key={g.key} className="mb-4 overflow-hidden rounded-lg border">
+                <div className="bg-muted/60 px-4 py-2 text-xs font-bold uppercase tracking-wide text-foreground/80">
+                  {g.label}
+                </div>
+                <div className="max-h-72 overflow-y-auto nice-scrollbar">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-32">Level</TableHead>
+                        <TableHead className="min-w-[200px]">Kode &amp; Uraian</TableHead>
+                        <TableHead className="text-right">Anggaran</TableHead>
+                        <TableHead className="text-right">Realisasi</TableHead>
+                        <TableHead className="text-right">%</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {rows.map((item) => (
+                        <TableRow key={item.code}>
+                          <TableCell>
+                            <Badge
+                              variant="secondary"
+                              className={`whitespace-nowrap font-mono text-[10px] ${
+                                item.level <= 2 ? 'bg-[#17408b]/10 text-[#17408b]' : 'bg-muted'
+                              }`}
+                            >
+                              {levelBadge(item.level)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div
+                              className="flex items-baseline gap-2"
+                              style={{ paddingLeft: `${(item.level - 1) * 14}px` }}
+                            >
+                              <span className="font-mono text-xs font-semibold">{item.code}</span>
+                              <span className="text-sm">{item.name}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">{formatRupiah(item.anggaran)}</TableCell>
+                          <TableCell className="text-right tabular-nums">{formatRupiah(item.realisasi)}</TableCell>
+                          <TableCell className="text-right tabular-nums font-semibold text-[#17408b]">
+                            {formatPct(item.pct)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )
+          })
+        ) : (
+          <p className="rounded-lg border border-dashed bg-muted/20 p-4 text-sm text-muted-foreground">
+            Belum ada rincian akun untuk OPD ini. Gunakan menu{' '}
+            <strong>Area OPD → Import LRA (PDF)</strong> untuk mengimpor LRA dan mengklasifikasi
+            kode rekening secara otomatis.
+          </p>
+        )}
       </section>
     </div>
   )

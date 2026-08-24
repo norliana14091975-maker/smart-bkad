@@ -21,6 +21,7 @@ import { AdminTransparansiSection } from '@/components/dashboard/sections/admin-
 import { AdminSettingsSection } from '@/components/dashboard/sections/admin-settings-section'
 import { AdminOpdSection } from '@/components/dashboard/sections/admin-opd-section'
 import { OpdDashboardSection } from '@/components/dashboard/sections/opd-dashboard-section'
+import { OpdImportSection } from '@/components/dashboard/sections/opd-import-section'
 import { LoginDialog } from '@/components/dashboard/admin/login-dialog'
 import { AdminGuard } from '@/components/dashboard/admin/admin-guard'
 import { useSettings } from '@/hooks/use-settings'
@@ -48,6 +49,7 @@ const SECTION_META: Record<
   'admin-settings': { title: 'Pengaturan Aplikasi', breadcrumbHome: 'Admin', breadcrumbCurrent: 'Pengaturan' },
   'admin-opd': { title: 'Kelola Data OPD/SKPD', breadcrumbHome: 'Admin', breadcrumbCurrent: 'Data OPD' },
   'opd-dashboard': { title: 'Dashboard OPD', breadcrumbHome: 'OPD', breadcrumbCurrent: 'Dashboard OPD' },
+  'opd-import': { title: 'Import LRA dari PDF', breadcrumbHome: 'OPD', breadcrumbCurrent: 'Import LRA' },
 }
 
 const ADMIN_SECTIONS: SectionId[] = [
@@ -61,7 +63,7 @@ const ADMIN_SECTIONS: SectionId[] = [
   'admin-opd',
 ]
 
-const OPD_SECTIONS: SectionId[] = ['opd-dashboard']
+const OPD_SECTIONS: SectionId[] = ['opd-dashboard', 'opd-import']
 
 export default function Home() {
   const [section, setSection] = useState<SectionId>('apbd')
@@ -210,6 +212,7 @@ export default function Home() {
             )}
 
             {isOpdSection && <OpdDashboardSection />}
+            {section === 'opd-import' && <OpdImportSection />}
           </main>
 
           <VisitorFooter settings={settings} />

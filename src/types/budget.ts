@@ -23,6 +23,8 @@ export interface RealisasiAkunDto {
   code: string
   name: string
   group: string
+  /** 1=akun, 2=kelompok, 3=jenis, 4=obyek, 5=rincian obyek */
+  level: number
   anggaran: number
   realisasi: number
   pct: number
@@ -77,6 +79,8 @@ export interface RealisasiAkunRowDto {
   code: string
   name: string
   group: string
+  level: number
+  opdName: string | null
   anggaran: number
   realisasi: number
 }
@@ -102,12 +106,16 @@ export interface ImportItemDto {
   anggaran: number
   realisasi: number
   pct: number
+  /** 1=akun, 2=kelompok, 3=jenis, 4=obyek, 5=rincian obyek */
+  level: number
 }
 
 export interface ImportParseResultDto {
   importLogId: number
   filename: string
   pages: number
+  opdId: number | null
+  opdName: string | null
   items: ImportItemDto[]
   textPreview: string
 }
@@ -119,6 +127,7 @@ export interface ImportLogDto {
   records: number
   status: string
   message: string | null
+  opdName: string | null
   createdAt: string
 }
 

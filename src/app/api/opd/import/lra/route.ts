@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { requireAdmin, unauthorized } from '@/lib/auth'
+import { getAdminUser, unauthorized } from '@/lib/auth'
 import {
   MAX_FILE_SIZE,
   MIN_TEXT_LENGTH,
@@ -8,19 +8,22 @@ import {
   extractPdfText,
 } from '@/lib/import-lra'
 
-// Pastikan handler berjalan di runtime Node (pdf-parse butuh API Node)
 export const runtime = 'nodejs'
 
 /**
- * Unggah & urai PDF LRA (admin). Form fields:
- * - file  : PDF (≤10 MB)
- * - opdId : opsional — bila diisi, import ditujukan untuk OPD/SKPD tersebut;
- *           bila kosong, tersimpan sebagai konsolidasi (scope global).
+ * Unggah & urai PDF LRA untuk OPD yang sedang login — scope otomatis
+ * mengikuti OPD tersebut (tidak bisa mengimpor untuk OPD lain).
  */
 export async function POST(req: Request) {
   try {
-    const admin = await requireAdmin()
-    if (!admin) return unauthorized()
+    const user = await getAdminUser()
+    if (!user || user.role !== 'opd' || !user.opdId) return unauthorized()
+
+    const opd = await db.opd.findUnique({ where: { id: user.opdId } })
+    if (!opd) return unauthorized()
+    if (!opd.active) {
+      return NextResponse.json({ error: 'Akun OPD dinonaktifkan' }, { status: 403 })
+    }
 
     const form = await req.formData().catch(() => null)
     const file = form?.get('file')
@@ -34,19 +37,7 @@ export async function POST(req: Request) {
       )
     }
 
-    // OPD tujuan import (validasi keberadaannya)
-    let opdId: number | null = null
-    const opdRaw = form?.get('opdId')
-    if (typeof opdRaw === 'string' && opdRaw) {
-      const n = Number(opdRaw)
-      if (Number.isInteger(n) && n > 0) {
-        const opd = await db.opd.findUnique({ where: { id: n } })
-        if (opd) opdId = n
-      }
-    }
-
     const buffer = Buffer.from(await file.arrayBuffer())
-    // Cek magic bytes: file PDF selalu diawali "%PDF-"
     if (buffer.length < 5 || buffer.subarray(0, 5).toString('latin1') !== '%PDF-') {
       return NextResponse.json({ error: 'File bukan PDF yang valid' }, { status: 400 })
     }
@@ -72,10 +63,7 @@ export async function POST(req: Request) {
       )
     }
 
-    // Ekstraksi & klasifikasi kode rekening (level 1-5) per chunk dengan LLM
     const items = await extractLraItems(text)
-
-    const opd = opdId ? await db.opd.findUnique({ where: { id: opdId } }) : null
 
     const log = await db.importLog.create({
       data: {
@@ -83,7 +71,7 @@ export async function POST(req: Request) {
         pages,
         records: items.length,
         status: 'parsed',
-        opdId,
+        opdId: opd.id,
         message: items.length === 0 ? 'Tidak ada baris LRA terdeteksi dari PDF' : null,
       },
     })
@@ -93,14 +81,14 @@ export async function POST(req: Request) {
         importLogId: log.id,
         filename: log.filename,
         pages,
-        opdId,
-        opdName: opd?.name ?? null,
+        opdId: opd.id,
+        opdName: opd.name,
         items,
         textPreview: text.slice(0, 500),
       },
     })
   } catch (error) {
-    console.error('POST /api/admin/import/lra error', error)
+    console.error('POST /api/opd/import/lra error', error)
     return NextResponse.json({ error: 'Gagal memproses import LRA' }, { status: 500 })
   }
 }

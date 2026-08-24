@@ -36,6 +36,7 @@ export type SectionId =
   | 'admin-settings'
   | 'admin-opd'
   | 'opd-dashboard'
+  | 'opd-import'
 
 interface NavChild {
   id: SectionId
@@ -101,7 +102,10 @@ const OPD_NAV: NavGroup = {
   id: 'opd',
   label: 'Area OPD',
   icon: Building2,
-  children: [{ id: 'opd-dashboard', label: 'Dashboard OPD' }],
+  children: [
+    { id: 'opd-dashboard', label: 'Dashboard OPD' },
+    { id: 'opd-import', label: 'Import LRA (PDF)' },
+  ],
 }
 
 interface SidebarNavProps {

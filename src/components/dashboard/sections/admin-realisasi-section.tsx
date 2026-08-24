@@ -35,6 +35,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { Badge } from '@/components/ui/badge'
+import { levelBadge } from '@/lib/kode-akun'
 import { formatPct, formatRupiah0 } from '@/lib/format'
 import type { RealisasiAkunRowDto, RealisasiSkpdRowDto } from '@/types/budget'
 
@@ -176,7 +178,9 @@ function AkunTable() {
               <TableRow className="bg-muted/60">
                 <TableHead className="w-24">Kode</TableHead>
                 <TableHead className="min-w-[220px]">Uraian</TableHead>
+                <TableHead>Level</TableHead>
                 <TableHead>Grup</TableHead>
+                <TableHead>OPD</TableHead>
                 <TableHead className="text-right">Anggaran</TableHead>
                 <TableHead className="text-right">Realisasi</TableHead>
                 <TableHead className="w-24 text-right">Aksi</TableHead>
@@ -186,7 +190,7 @@ function AkunTable() {
               {isLoading ? (
                 [1, 2, 3].map((i) => (
                   <TableRow key={i}>
-                    <TableCell colSpan={6}>
+                    <TableCell colSpan={8}>
                       <Skeleton className="h-5 w-full" />
                     </TableCell>
                   </TableRow>
@@ -195,9 +199,23 @@ function AkunTable() {
                 data.map((row) => (
                   <TableRow key={row.id}>
                     <TableCell className="font-mono text-xs">{row.code}</TableCell>
-                    <TableCell className="font-medium">{row.name}</TableCell>
+                    <TableCell className="font-medium">
+                      <div style={{ paddingLeft: `${(row.level - 1) * 12}px` }}>{row.name}</div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary" className="whitespace-nowrap bg-muted font-mono text-[10px]">
+                        {levelBadge(row.level)}
+                      </Badge>
+                    </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {GROUP_LABELS[row.group] ?? row.group}
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      {row.opdName ? (
+                        <span className="font-semibold">{row.opdName}</span>
+                      ) : (
+                        <span className="text-muted-foreground">Konsolidasi</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">{formatRupiah0(row.anggaran)}</TableCell>
                     <TableCell className="text-right tabular-nums">
@@ -232,7 +250,7 @@ function AkunTable() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-6 text-center text-muted-foreground">
+                  <TableCell colSpan={8} className="py-6 text-center text-muted-foreground">
                     Belum ada data realisasi. Gunakan fitur Import LRA (PDF).
                   </TableCell>
                 </TableRow>
