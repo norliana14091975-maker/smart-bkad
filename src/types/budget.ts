@@ -117,7 +117,16 @@ export interface ImportParseResultDto {
   opdId: number | null
   opdName: string | null
   items: ImportItemDto[]
+  stats: ImportStatsDto
   textPreview: string
+}
+
+// Statistik penerapan aturan BAS Permendagri pada hasil ekstraksi
+export interface ImportStatsDto {
+  valid: number
+  dropped: number
+  derived: number
+  droppedExamples: string[]
 }
 
 export interface ImportLogDto {

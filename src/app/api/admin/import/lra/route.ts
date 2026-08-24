@@ -72,8 +72,9 @@ export async function POST(req: Request) {
       )
     }
 
-    // Ekstraksi & klasifikasi kode rekening (level 1-5) per chunk dengan LLM
-    const items = await extractLraItems(text)
+    // Ekstraksi & klasifikasi kode rekening per level sesuai aturan BAS
+    // Permendagri (validasi kode, hierarki lengkap) dengan LLM per chunk
+    const { items, stats } = await extractLraItems(text)
 
     const opd = opdId ? await db.opd.findUnique({ where: { id: opdId } }) : null
 
@@ -96,6 +97,7 @@ export async function POST(req: Request) {
         opdId,
         opdName: opd?.name ?? null,
         items,
+        stats,
         textPreview: text.slice(0, 500),
       },
     })

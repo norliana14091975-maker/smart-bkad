@@ -190,14 +190,16 @@ export function ImportLraPanel({ mode }: { mode: 'admin' | 'opd' }) {
           <p className="font-semibold text-foreground">Cara kerja fitur import</p>
           <ol className="mt-1 list-decimal space-y-0.5 pl-5">
             <li>Pilih OPD/SKPD tujuan{mode === 'opd' ? ' (otomatis: OPD Anda)' : ''} lalu unggah file PDF LRA (maks. 10 MB, harus berisi teks).</li>
-            <li>Sistem membaca teks PDF lalu mengekstrak &amp; mengklasifikasikan kode rekening per level dengan AI.</li>
+            <li>Sistem membaca teks PDF lalu mengekstrak &amp; memvalidasi kode rekening sesuai aturan Bagan Akun Standar (BAS) Permendagri 77/2020 dengan AI.</li>
             <li>Tinjau hasil ekstraksi, pilih mode penyimpanan, lalu konfirmasi.</li>
           </ol>
           <p className="mt-1.5 text-xs text-muted-foreground">
-            Klasifikasi kode: <strong>L1 Akun</strong> (4) · <strong>L2 Kelompok</strong> (4.1) ·{' '}
-            <strong>L3 Jenis</strong> (4.1.01) · <strong>L4 Obyek</strong> (4.1.01.01) ·{' '}
-            <strong>L5 Rincian Obyek</strong> (4.1.01.01.01). Kode diawali 4 (Pendapatan),
-            5 (Belanja), atau 6 (Pembiayaan) dikelompokkan otomatis.
+            Struktur kode rekening sesuai Permendagri: <strong>L1 Akun</strong> (4) ·{' '}
+            <strong>L2 Kelompok</strong> (4.1) · <strong>L3 Jenis</strong> (4.1.01) ·{' '}
+            <strong>L4 Obyek</strong> (4.1.01.01) · <strong>L5 Rincian Obyek</strong>{' '}
+            (4.1.01.01.001). Kode di luar struktur BAS otomatis dibuang; nama akun &amp;
+            kelompok dinormalkan ke nomenklatur baku; level induk yang tidak tercetak
+            diturunkan dari penjumlahan level anaknya sesuai struktur LRA.
           </p>
         </div>
       </div>
@@ -312,6 +314,27 @@ export function ImportLraPanel({ mode }: { mode: 'admin' | 'opd' }) {
             >
               {result.opdName ? `OPD: ${result.opdName}` : 'Konsolidasi (seluruh OPD)'}
             </Badge>
+            {result.stats && (
+              <>
+                <Badge variant="secondary" className="bg-green-100 text-green-800">
+                  {result.stats.valid} baris valid
+                </Badge>
+                {result.stats.derived > 0 && (
+                  <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+                    {result.stats.derived} induk diturunkan
+                  </Badge>
+                )}
+                {result.stats.dropped > 0 && (
+                  <Badge
+                    variant="secondary"
+                    className="bg-red-100 text-red-800"
+                    title={`Kode di luar struktur BAS dibuang: ${result.stats.droppedExamples.join(', ')}`}
+                  >
+                    {result.stats.dropped} ditolak (non-BAS)
+                  </Badge>
+                )}
+              </>
+            )}
           </div>
 
           <div className="mb-3 overflow-hidden rounded-md border">

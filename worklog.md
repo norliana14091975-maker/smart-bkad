@@ -155,3 +155,27 @@ Work Log:
 
 Stage Summary:
 - Import LRA kini mengklasifikasi kode rekening otomatis per level Permendagri (L1 akun … L5 rincian obyek, tampil sbg badge + indentasi hierarkis) dan mendukung import per OPD/SKPD: admin memilih OPD tujuan (atau konsolidasi global), akun OPD otomatis terikat OPD-nya (isolasi ketat: scope dipaksa server, validasi log milik OPD); hasil import OPD otomatis memperbarui ringkasan SKPD di dashboard publik; agregasi publik menjumlahkan lintas OPD per kode pada level terendah agar tidak dobel hitung
+
+---
+Task ID: 7
+Agent: Z.ai Code (main)
+Task: Perbaiki rule import LRA agar mengikuti struktur Bagan Akun Standar (BAS) Permendagri 77/2020 (peraturan berlaku)
+
+Work Log:
+- src/lib/kode-akun.ts ditulis ulang sebagai pusat aturan BAS:
+  - normalizeKode(): validasi + normalisasi kode ke bentuk baku — struktur digit 1-1-2-2-3 (akun 1 digit; kelompok 2; jenis 4; obyek 6; rincian obyek 9 = segmen 3 digit, contoh 4.1.01.01.001; varian warisan 8 digit/2 digit tetap L5); menerima kode flat tanpa titik ("4102"→"4.1.02") dan bertitik; menolak akun selain 4/5/6, kelompok tak baku (4.4/5.5), jumlah digit tak sah, dan karakter non-digit
+  - AKUN_STANDAR/KELOMPOK_STANDAR + standardNameFor(): nomenklatur baku Permendagri (mis. 4=PENDAPATAN DAERAH, 5.2=BELANJA MODAL, 6.1=PENERIMAAN PEMBIAYAAN)
+  - applyHierarchy(): konsistensi hierarki LRA — induk level≥2 yang tidak tercetak diturunkan bottom-up dari penjumlahan anak langsung (diproses level terdalam→atas; induk turunan dihitung ulang bila anak baru muncul; nilai induk asli dari PDF dipertahankan apa adanya); nama induk turunan L1/L2 memakai nomenklatur baku
+- src/lib/import-lra.ts:
+  - normalizeItem() kini memakai normalizeKode + standardNameFor; anggaran tidak boleh negatif, realisasi boleh negatif (koreksi LRA, tanda kurung/minus diparse)
+  - extractLraItems() mengembalikan {items, stats{valid,dropped,derived,droppedExamples}} — entri non-BAS dibuang dan dicontohkan; applyHierarchy dijalankan setelah dedupe
+  - confirmLra() menjalankan applyHierarchy (idempoten) sebelum simpan
+  - Prompt LLM diperbarui: struktur BAS Permendagri 77/2020 lengkap (level + contoh rincian 3 digit), kelompok valid 4.1-4.3/5.1-5.4/6.1-6.2, kode flat diperbolehkan, realisasi negatif minus
+- Routes admin & opd import/lra: kembalikan stats; types + ImportStatsDto; UI panel import: badge "N baris valid / N induk diturunkan / N ditolak (non-BAS, dengan tooltip contoh kode)" + teks aturan Permendagri pada kotak info
+- scripts/make-test-lra.ts: PDF uji format baku — rincian obyek 3 digit (4.1.01.01.001, 5.1.01.01.001), satu kode flat (4102), induk 5/5.1/5.2/6/6.1/6.2 sengaja tidak dicetak (uji roll-up), satu baris non-BAS (7.1.01)
+- Uji unit rule (bun): normalisasi 16/16 lulus (termasuk penolakan 7.1.01, 4.4.01, 4.1.1, 41011); roll-up: induk asli dipertahankan, 4.1/4.1.01.01/5.1/5.2/5 diturunkan benar (5=5.1+5.2=50/29), nama baku diterapkan
+- Uji API: import utk DINAS KESEHATAN → valid 13, ditolak 1 (7.1.01), induk diturunkan 7, total 20 baris; verifikasi 9/9 aturan (4=100T/60T; 4.1.02 dari flat 4102=20T/15T; 4.1.01.01.001=8T/5T; 5=50T/29T; 5.1=40T/25T; 5.2=10T/4T; 6=9T/5T; 6.1=5T/3T; 6.2=4T/2T); confirm replace → SKPD summary persis mengikuti total LRA (pendapatan 100T/60T, belanja 50T/29T, pembiayaan 5T/3T); summary publik: totalApbd 54T (5+6.2), penerimaan 63T (4+6.1), pengeluaran 31T, silpa 32T — semua tanpa double-count
+- Uji browser: teks aturan Permendagri tampil; upload → "Ekstraksi berhasil — 20 baris" + badge "13 baris valid", "7 induk diturunkan", "1 ditolak (non-BAS)" + badge level L1-L5; konfirmasi sukses; tanpa error console; lint bersih; seed di-restore
+
+Stage Summary:
+- Rule import LRA kini sepenuhnya mengikuti peraturan berlaku (BAS Permendagri 77/2020): kode tervalidasi & dinormalisasi (flat/titik, rincian 3 digit + warisan 2 digit), nama akun/kelompok memakai nomenklatur baku, baris non-BAS otomatis dibuang (dilaporkan), hierarki dijamin konsisten (induk hilang diturunkan dari jumlah anak, nilai induk tercetak dipertahankan), realisasi negatif (koreksi) didukung, dan ringkasan SKPD/publik mengikuti total LRA tanpa double-count

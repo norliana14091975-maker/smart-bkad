@@ -63,7 +63,9 @@ export async function POST(req: Request) {
       )
     }
 
-    const items = await extractLraItems(text)
+    // Ekstraksi & klasifikasi kode rekening per level sesuai aturan BAS
+    // Permendagri (validasi kode, hierarki lengkap) dengan LLM per chunk
+    const { items, stats } = await extractLraItems(text)
 
     const log = await db.importLog.create({
       data: {
@@ -84,6 +86,7 @@ export async function POST(req: Request) {
         opdId: opd.id,
         opdName: opd.name,
         items,
+        stats,
         textPreview: text.slice(0, 500),
       },
     })
