@@ -33,6 +33,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { levelBadge } from '@/lib/kode-akun'
+import { useLevelFilter } from '@/hooks/use-level-filter'
+import { LevelFilterControls } from '@/components/dashboard/level-filter-controls'
 import { formatPct, formatRupiah0 } from '@/lib/format'
 import type {
   ImportItemDto,
@@ -84,6 +86,8 @@ export function ImportLraPanel({ mode }: { mode: 'admin' | 'opd' }) {
       return ((await res.json()) as { data: ImportLogDto[] }).data
     },
   })
+
+  const { isVisible } = useLevelFilter()
 
   const [selectedOpdId, setSelectedOpdId] = useState('') // '' = konsolidasi
   const [uploading, setUploading] = useState(false)
@@ -338,6 +342,8 @@ export function ImportLraPanel({ mode }: { mode: 'admin' | 'opd' }) {
             )}
           </div>
 
+          <LevelFilterControls className="mb-3" />
+
           <div className="mb-3 overflow-hidden rounded-md border">
             <div className="max-h-96 overflow-y-auto nice-scrollbar">
               <Table>
@@ -351,7 +357,9 @@ export function ImportLraPanel({ mode }: { mode: 'admin' | 'opd' }) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {result.items.map((item: ImportItemDto) => (
+                  {result.items
+                    .filter((item: ImportItemDto) => isVisible(item.level))
+                    .map((item: ImportItemDto) => (
                     <TableRow key={item.code}>
                       <TableCell>
                         <Badge

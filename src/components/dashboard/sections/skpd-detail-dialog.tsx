@@ -21,6 +21,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { levelBadge } from '@/lib/kode-akun'
+import { useLevelFilter } from '@/hooks/use-level-filter'
+import { LevelFilterControls } from '@/components/dashboard/level-filter-controls'
 import { formatPct, formatRupiah0 } from '@/lib/format'
 import type { RealisasiAkunDto } from '@/types/budget'
 
@@ -46,6 +48,8 @@ export function SkpdDetailDialog({
 }) {
   const open = opdId !== null
 
+  const { isVisible } = useLevelFilter()
+
   const detailQuery = useQuery({
     queryKey: ['skpd-detail-akun', opdId],
     queryFn: async (): Promise<RealisasiAkunDto[]> => {
@@ -69,6 +73,8 @@ export function SkpdDetailDialog({
           </DialogDescription>
         </DialogHeader>
 
+        <LevelFilterControls />
+
         {detailQuery.isLoading ? (
           <div className="flex flex-col items-center gap-2 py-10 text-muted-foreground">
             <Loader2 className="h-8 w-8 animate-spin text-[#17408b]" aria-hidden="true" />
@@ -79,8 +85,14 @@ export function SkpdDetailDialog({
             Gagal memuat rincian realisasi.
           </p>
         ) : detailQuery.data && detailQuery.data.length > 0 ? (
+          detailQuery.data.every((r) => !isVisible(r.level)) ? (
+            <p className="rounded-lg border border-dashed bg-muted/20 p-4 text-center text-sm text-muted-foreground">
+              Tidak ada kode rekening pada level terpilih. Klik “Tampilkan Semua” untuk
+              mengembalikan seluruh level.
+            </p>
+          ) : (
           AKUN_GROUPS.map((g) => {
-            const rows = detailQuery.data.filter((r) => r.group === g.key)
+            const rows = detailQuery.data.filter((r) => r.group === g.key && isVisible(r.level))
             if (rows.length === 0) return null
             return (
               <Fragment key={g.key}>
@@ -139,6 +151,7 @@ export function SkpdDetailDialog({
               </Fragment>
             )
           })
+          )
         ) : (
           <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed bg-muted/20 py-10 text-center text-muted-foreground">
             <FileWarning className="h-8 w-8" aria-hidden="true" />

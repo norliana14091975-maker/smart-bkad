@@ -18,6 +18,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { levelBadge } from '@/lib/kode-akun'
+import { useLevelFilter } from '@/hooks/use-level-filter'
+import { LevelFilterControls } from '@/components/dashboard/level-filter-controls'
 import { formatPct, formatRupiah, formatRupiah0 } from '@/lib/format'
 import type { OpdSelfDto, RealisasiAkunDto } from '@/types/budget'
 
@@ -59,6 +61,7 @@ export function OpdDashboardSection() {
   })
 
   const opdId = data?.opd.id ?? null
+  const { isVisible } = useLevelFilter()
 
   // Rincian realisasi akun milik OPD ini (hasil import LRA)
   const akunQuery = useQuery({
@@ -298,11 +301,13 @@ export function OpdDashboardSection() {
           L4 Obyek · L5 Rincian Obyek · L6 Sub Rincian Obyek.
         </p>
 
+        <LevelFilterControls className="mb-4" />
+
         {akunQuery.isLoading ? (
           <Skeleton className="h-24 w-full" />
         ) : akunQuery.data && akunQuery.data.length > 0 ? (
           AKUN_GROUPS.map((g) => {
-            const rows = akunQuery.data.filter((r) => r.group === g.key)
+            const rows = akunQuery.data.filter((r) => r.group === g.key && isVisible(r.level))
             if (rows.length === 0) return null
             return (
               <div key={g.key} className="mb-4 overflow-hidden rounded-lg border">

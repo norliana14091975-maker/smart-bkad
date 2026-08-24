@@ -17,6 +17,8 @@ import { SectionHeading } from '@/components/dashboard/section-heading'
 import { Badge } from '@/components/ui/badge'
 import { useToday } from '@/hooks/use-today'
 import { levelBadge } from '@/lib/kode-akun'
+import { useLevelFilter } from '@/hooks/use-level-filter'
+import { LevelFilterControls } from '@/components/dashboard/level-filter-controls'
 import { formatDateFromISO, formatPct, formatRupiah, formatTriliun } from '@/lib/format'
 import type { RealisasiAkunDto } from '@/types/budget'
 
@@ -53,17 +55,18 @@ export function RealisasiAkunSection() {
 
   const items = data?.data ?? []
   const summary = data?.summary
+  const { isVisible } = useLevelFilter()
 
   const byGroup = useMemo(() => {
     const map = new Map<string, RealisasiAkunDto[]>()
     for (const g of GROUPS) {
       map.set(
         g.key,
-        items.filter((i) => i.group === g.key)
+        items.filter((i) => i.group === g.key && isVisible(i.level))
       )
     }
     return map
-  }, [items])
+  }, [items, isVisible])
 
   return (
     <div>
@@ -96,6 +99,8 @@ export function RealisasiAkunSection() {
           Gagal memuat data realisasi.
         </p>
       )}
+
+      <LevelFilterControls className="mb-4" />
 
       {/* Kartu ringkasan */}
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">

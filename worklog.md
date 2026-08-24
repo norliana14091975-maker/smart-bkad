@@ -199,3 +199,23 @@ Work Log:
 
 Stage Summary:
 - Realisasi Per-SKPD kini interaktif: klik baris ber-badge RINCIAN membuka rincian per-akun hierarkis L1-L6 dari LRA; data kecamatan asli (Suling Tambun) terimport penuh dgn rule BAS level 6 + rekonsiliasi matematis (induk=jumlah anak) + anti-salah-baca angka (string-copy) + pemulihan respons LLM terpotong; kredensial OPD kecamatan: kecamatan-suling-tambun / Opd-yy2NpMRqgj
+
+---
+Task ID: 9
+Agent: Z.ai Code (main)
+Task: Pengaturan filter level kode rekening (L1-L6) pada rincian per-SKPD dan seluruh tampilan — memudahkan Kepala Daerah memilih level kode akun yang ditampilkan
+
+Work Log:
+- src/hooks/use-level-filter.ts: filter level global berbasis external store + useSyncExternalStore — SEMUA instance hook berbagi satu state (perubahan di satu kontrol langsung berlaku di tampilan lain secara real-time); persist localStorage 'bpkd.levelFilter' ([] = semua level); sinkron antar-tab via event 'storage'; server snapshot [] agar aman SSR/hidrasi; API: levels/isVisible(level)/toggle(level)/selectAll()/matchCount
+- src/components/dashboard/level-filter-controls.tsx: kontrol UI bersama — chip toggle L1-L6 (aktif biru #17408b, aria-pressed), label ringkas "Semua level tampil" / "N level: L1 Akun, L3 Jenis", tombol "Tampilkan Semua" saat ada filter aktif
+- Integrasi di 5 tampilan rincian (semua memakai store yang sama):
+  1. Dialog detail Realisasi Per-SKPD (drill-down): kontrol di dalam dialog, baris difilter, empty-state informatif bila filter menyembunyikan semua
+  2. Dashboard OPD — tabel "Rincian Realisasi Per-Akun OPD Ini": kontrol di atas tabel + baris difilter
+  3. Dashboard publik Realisasi Per-Akun: kontrol di bawah heading (kartu ringkasan tetap dari seluruh data — hanya daftar rincian yang difilter); useMemo dependensi isVisible
+  4. Panel Import LRA — preview hasil ekstraksi: kontrol di atas tabel preview (tidak mengubah data yang disimpan, hanya tampilan tinjauan)
+  5. Admin → Data Realisasi → Per-Akun: kontrol di atas tabel kelola + baris difilter
+- Perbaikan desain awal: versi pertama hook (useState per-instance) tidak menyinkronkan antar komponen — diganti external store useSyncExternalStore agar "berlaku di semuanya" secara real-time
+- Verifikasi browser: default semua (109 baris) → klik L3 → hanya L3 (label "1 level: L3 Jenis") → Tampilkan Semua → 109 kembali → combo L1+L3 (5 baris, label "2 level") → persist setelah reload (state [3] tetap) → dialog detail SKPD mengikuti filter aktif yang sama (L1+L3, 5 baris) → reset dari DALAM dialog juga memulihkan 109 baris → Dashboard OPD: klik L1 → 2 baris (Pendapatan & Belanja) → reset; tanpa error console; lint bersih; localStorage kembali "[]"
+
+Stage Summary:
+- Filter level kode rekening (L1 Akun, L2 Kelompok, L3 Jenis, L4 Obyek, L5 Rincian Obyek, L6 Sub Rincian Obyek) kini tersedia dan konsisten di SEMUA tampilan rincian (dialog detail per-SKPD, dashboard OPD, realisasi per-akun publik, preview import, kelola admin) dengan satu kontrol bersama; pilihan dipersist (localStorage) sehingga preferensi Kepala Daerah tetap berlaku lintas halaman/sesi; ringkasan agregat tidak terpengaruh filter (hanya kedalaman rincian yang ditampilkan)

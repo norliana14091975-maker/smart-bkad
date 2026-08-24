@@ -37,6 +37,8 @@ import {
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { levelBadge } from '@/lib/kode-akun'
+import { useLevelFilter } from '@/hooks/use-level-filter'
+import { LevelFilterControls } from '@/components/dashboard/level-filter-controls'
 import { formatPct, formatRupiah0 } from '@/lib/format'
 import type { RealisasiAkunRowDto, RealisasiSkpdRowDto } from '@/types/budget'
 
@@ -101,6 +103,7 @@ function AkunTable() {
     queryKey: ['admin-realisasi-akun'],
     queryFn: fetchAkun,
   })
+  const { isVisible } = useLevelFilter()
 
   const [editing, setEditing] = useState<RealisasiAkunRowDto | null>(null)
   const [anggaran, setAnggaran] = useState('')
@@ -171,6 +174,8 @@ function AkunTable() {
         </p>
       )}
 
+      <LevelFilterControls className="mb-3" />
+
       <div className="overflow-hidden rounded-lg border">
         <div className="max-h-[28rem] overflow-auto nice-scrollbar">
           <Table>
@@ -196,7 +201,9 @@ function AkunTable() {
                   </TableRow>
                 ))
               ) : data && data.length > 0 ? (
-                data.map((row) => (
+                data
+                .filter((row) => isVisible(row.level))
+                .map((row) => (
                   <TableRow key={row.id}>
                     <TableCell className="font-mono text-xs">{row.code}</TableCell>
                     <TableCell className="font-medium">
