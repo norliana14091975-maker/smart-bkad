@@ -3,6 +3,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { BudgetChart, type ChartRow } from '@/components/dashboard/budget-chart'
 import { SectionHeading } from '@/components/dashboard/section-heading'
+import { LraSyncBadge, type LraSyncMetaDto } from '@/components/dashboard/lra-sync-badge'
 import type { ApbdSummaryDto } from '@/types/budget'
 
 export const APBD_SERIES = [
@@ -25,11 +26,11 @@ const APBD_SERIES_KELUAR = [
   { key: 'apbdp', label: 'APBDP', color: '#e07b00' },
 ]
 
-async function fetchApbd(): Promise<ApbdSummaryDto[]> {
+async function fetchApbd(): Promise<{ data: ApbdSummaryDto[]; meta?: LraSyncMetaDto }> {
   const res = await fetch('/api/apbd')
   if (!res.ok) throw new Error('Gagal memuat data APBD')
-  const json = (await res.json()) as { data: ApbdSummaryDto[] }
-  return json.data
+  const json = (await res.json()) as { data: ApbdSummaryDto[]; meta?: LraSyncMetaDto }
+  return { data: json.data, meta: json.meta }
 }
 
 export function ApbdSection() {
@@ -38,19 +39,20 @@ export function ApbdSection() {
     queryFn: fetchApbd,
   })
 
-  const pendapatanRows: ChartRow[] = (data ?? []).map((d) => ({
+  const rows = data?.data
+  const pendapatanRows: ChartRow[] = (rows ?? []).map((d) => ({
     label: String(d.year),
     values: { apbd: d.pendapatan.apbd, apbdp: d.pendapatan.apbdp },
   }))
-  const belanjaRows: ChartRow[] = (data ?? []).map((d) => ({
+  const belanjaRows: ChartRow[] = (rows ?? []).map((d) => ({
     label: String(d.year),
     values: { apbd: d.belanja.apbd, apbdp: d.belanja.apbdp },
   }))
-  const terimaRows: ChartRow[] = (data ?? []).map((d) => ({
+  const terimaRows: ChartRow[] = (rows ?? []).map((d) => ({
     label: String(d.year),
     values: { apbd: d.penerimaanPembiayaan.apbd, apbdp: d.penerimaanPembiayaan.apbdp },
   }))
-  const keluarRows: ChartRow[] = (data ?? []).map((d) => ({
+  const keluarRows: ChartRow[] = (rows ?? []).map((d) => ({
     label: String(d.year),
     values: { apbd: d.pengeluaranPembiayaan.apbd, apbdp: d.pengeluaranPembiayaan.apbdp },
   }))
@@ -66,6 +68,8 @@ export function ApbdSection() {
           Gagal memuat data APBD. Silakan muat ulang halaman.
         </p>
       )}
+
+      <LraSyncBadge meta={data?.meta} />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-5">
         <BudgetChart
           title="Anggaran Pendapatan"

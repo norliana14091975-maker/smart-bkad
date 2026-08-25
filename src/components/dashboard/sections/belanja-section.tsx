@@ -23,6 +23,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { SectionHeading } from '@/components/dashboard/section-heading'
+import { LraSyncBadge, type LraSyncMetaDto } from '@/components/dashboard/lra-sync-badge'
 import { formatRupiah, formatRupiah0 } from '@/lib/format'
 import type { BudgetItemDto, BudgetTabDto } from '@/types/budget'
 
@@ -42,11 +43,11 @@ const TAB_LABELS: Record<TabKey, string> = {
   urusan: 'Per-Urusan',
 }
 
-async function fetchBelanja(): Promise<BudgetTabDto[]> {
+async function fetchBelanja(): Promise<{ tabs: BudgetTabDto[]; meta?: LraSyncMetaDto }> {
   const res = await fetch('/api/belanja?tabs=ops,mdl,ttdg,tf,urusan')
   if (!res.ok) throw new Error('Gagal memuat data belanja')
-  const json = (await res.json()) as { data: BudgetTabDto[] }
-  return json.data
+  const json = (await res.json()) as { data: BudgetTabDto[]; meta?: LraSyncMetaDto }
+  return { tabs: json.data, meta: json.meta }
 }
 
 export function BelanjaSection() {
@@ -56,9 +57,11 @@ export function BelanjaSection() {
     queryFn: fetchBelanja,
   })
 
+  const tabsData = data?.tabs
+
   // gabungkan 2026/2025 per kode akun untuk tab aktif
   const rows = useMemo(() => {
-    const tabData = data?.find((t) => t.tab === tab)
+    const tabData = tabsData?.find((t) => t.tab === tab)
     const byCode = new Map<string, { code: string; name: string; y2026: number; y2025: number }>()
     for (const it of tabData?.items ?? []) {
       const existing = byCode.get(it.code) ?? { code: it.code, name: it.name, y2026: 0, y2025: 0 }
@@ -67,7 +70,7 @@ export function BelanjaSection() {
       byCode.set(it.code, existing)
     }
     return Array.from(byCode.values())
-  }, [data, tab])
+  }, [tabsData, tab])
 
   const chartData = rows.map((r) => ({
     name: r.code,
@@ -93,6 +96,8 @@ export function BelanjaSection() {
           Gagal memuat data belanja.
         </p>
       )}
+
+      <LraSyncBadge meta={data?.meta} />
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)} className="w-full">
         <div className="overflow-x-auto pb-1">

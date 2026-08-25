@@ -4,6 +4,7 @@ import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { BudgetChart, type ChartRow } from '@/components/dashboard/budget-chart'
 import { SectionHeading } from '@/components/dashboard/section-heading'
+import { LraSyncBadge, type LraSyncMetaDto } from '@/components/dashboard/lra-sync-badge'
 import { formatRupiah } from '@/lib/format'
 import type { BudgetItemDto } from '@/types/budget'
 
@@ -12,11 +13,14 @@ const SERIES = [
   { key: 'y2025', label: '2025', color: '#1e7a34' },
 ]
 
-async function fetchPendapatan(): Promise<BudgetItemDto[]> {
+async function fetchPendapatan(): Promise<{ items: BudgetItemDto[]; meta?: LraSyncMetaDto }> {
   const res = await fetch('/api/pendapatan?tabs=utama')
   if (!res.ok) throw new Error('Gagal memuat data pendapatan')
-  const json = (await res.json()) as { data: { items: BudgetItemDto[] }[] }
-  return json.data[0]?.items ?? []
+  const json = (await res.json()) as {
+    data: { items: BudgetItemDto[] }[]
+    meta?: LraSyncMetaDto
+  }
+  return { items: json.data[0]?.items ?? [], meta: json.meta }
 }
 
 export function PendapatanSection() {
@@ -25,17 +29,19 @@ export function PendapatanSection() {
     queryFn: fetchPendapatan,
   })
 
+  const items = data?.items ?? []
+
   // gabungkan item 2026 & 2025 per kode akun
   const rows = useMemo(() => {
     const byCode = new Map<string, { code: string; name: string; y2026: number; y2025: number }>()
-    for (const it of data ?? []) {
+    for (const it of items) {
       const existing = byCode.get(it.code) ?? { code: it.code, name: it.name, y2026: 0, y2025: 0 }
       if (it.year === 2026) existing.y2026 = it.amount
       if (it.year === 2025) existing.y2025 = it.amount
       byCode.set(it.code, existing)
     }
     return Array.from(byCode.values())
-  }, [data])
+  }, [items])
 
   const chartRows: ChartRow[] = rows.map((r) => ({
     label: r.code,
@@ -61,6 +67,8 @@ export function PendapatanSection() {
           Gagal memuat data pendapatan.
         </p>
       )}
+
+      <LraSyncBadge meta={data?.meta} />
       <div className="rounded-lg border bg-muted/40 p-4 sm:p-5">
         <h3 className="mb-3 text-center text-sm font-bold uppercase tracking-widest text-foreground/80">
           Anggaran Pendapatan per Akun

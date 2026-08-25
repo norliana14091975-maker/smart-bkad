@@ -23,6 +23,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { SectionHeading } from '@/components/dashboard/section-heading'
+import { LraSyncBadge, type LraSyncMetaDto } from '@/components/dashboard/lra-sync-badge'
 import { formatRupiah, formatRupiah0 } from '@/lib/format'
 import type { BudgetItemDto, BudgetTabDto } from '@/types/budget'
 
@@ -38,11 +39,11 @@ const SERIES_KELUAR = [
 
 type TabKey = 'terima' | 'keluar'
 
-async function fetchPembiayaan(): Promise<BudgetTabDto[]> {
+async function fetchPembiayaan(): Promise<{ tabs: BudgetTabDto[]; meta?: LraSyncMetaDto }> {
   const res = await fetch('/api/pembiayaan?tabs=terima,keluar')
   if (!res.ok) throw new Error('Gagal memuat data pembiayaan')
-  const json = (await res.json()) as { data: BudgetTabDto[] }
-  return json.data
+  const json = (await res.json()) as { data: BudgetTabDto[]; meta?: LraSyncMetaDto }
+  return { tabs: json.data, meta: json.meta }
 }
 
 export function PembiayaanSection() {
@@ -52,8 +53,10 @@ export function PembiayaanSection() {
     queryFn: fetchPembiayaan,
   })
 
+  const tabsData = data?.tabs
+
   const rows = useMemo(() => {
-    const tabData = data?.find((t) => t.tab === tab)
+    const tabData = tabsData?.find((t) => t.tab === tab)
     const byCode = new Map<string, { code: string; name: string; y2026: number; y2025: number }>()
     for (const it of tabData?.items ?? []) {
       const existing = byCode.get(it.code) ?? { code: it.code, name: it.name, y2026: 0, y2025: 0 }
@@ -62,7 +65,7 @@ export function PembiayaanSection() {
       byCode.set(it.code, existing)
     }
     return Array.from(byCode.values())
-  }, [data, tab])
+  }, [tabsData, tab])
 
   const series = tab === 'terima' ? SERIES : SERIES_KELUAR
 
@@ -88,6 +91,8 @@ export function PembiayaanSection() {
           Gagal memuat data pembiayaan.
         </p>
       )}
+
+      <LraSyncBadge meta={data?.meta} />
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)} className="w-full">
         <div className="overflow-x-auto pb-1">

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getLraSync, metaFrom, syncTabItems } from '@/lib/lra-sync'
 import type { BudgetTabDto } from '@/types/budget'
 
 export const TAB_LABELS: Record<string, string> = {
@@ -34,11 +35,27 @@ export async function getBudgetTabs(section: string, tabs: string[]): Promise<Bu
 }
 
 export async function GET(request: NextRequest) {
-  // fallback agar file ini tidak dianggap route kosong saat diimpor
   const tabs = request.nextUrl.searchParams.get('tabs') ?? 'utama'
   try {
-    const data = await getBudgetTabs('pendapatan', tabs.split(','))
-    return NextResponse.json({ data })
+    const [staticTabs, sync] = await Promise.all([
+      getBudgetTabs('pendapatan', tabs.split(',')),
+      getLraSync(),
+    ])
+
+    // Sinkronisasi: anggaran tahun berjalan dari LRA terimport (level jenis),
+    // tahun sebelumnya tetap dari baseline untuk pembanding
+    let anySynced = false
+    const data: BudgetTabDto[] = staticTabs.map((t) => {
+      const { items, synced } = syncTabItems(
+        t.items,
+        sync,
+        (r) => r.group === 'PENDAPATAN' && r.level === 3
+      )
+      if (synced) anySynced = true
+      return { ...t, items }
+    })
+
+    return NextResponse.json({ data, meta: metaFrom(sync, anySynced) })
   } catch (error) {
     console.error('GET budget error', error)
     return NextResponse.json({ error: 'Gagal memuat data anggaran' }, { status: 500 })

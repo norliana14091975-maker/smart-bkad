@@ -290,3 +290,21 @@ Work Log:
 
 Stage Summary:
 - Import LRA kini per periode (bulan kumulatif s.d. N, auto-detect dari header PDF atau pilih manual; import periode berbeda tersimpan terpisah); seluruh tampilan realisasi (publik/detail SKPD/dashboard OPD) punya filter periode global persist (bulan/triwulan/semester/setahun/periode terakhir) + kartu pembanding antar periode — Kepala Daerah dapat membandingkan capaian kumulatif antar bulan/triwulan/semester; ringkasan SKPD utama otomatis memakai LRA terbaru tiap OPD
+
+---
+Task ID: 14
+Agent: Z.ai Code (main)
+Task: Sinkronisasikan aplikasi (APBD, Pendapatan, Belanja, Pembiayaan) dengan data LRA yang masuk
+
+Work Log:
+- src/lib/lra-sync.ts (baru): getLraSync() — agregat LRA terimport (mode aggregate = seluruh OPD pada periode TERAKHIR masing-masing; fallback global; bila kosong → tidak tersinkron), agregasi per kode lintas OPD, meta {synced, opdCount, opdNames, periodeLabel}; lraTotal(rows, prefix, field) — total per prefix kode, null bila tidak ada baris LRA (pemanggil pertahankan baseline); syncTabItems() — gabung item statis + LRA utk satu tab (tahun berjalan dari LRA level jenis; kode statis tanpa LRA → 0; tahun sebelumnya dari baseline sbg pembanding; guard: bila LRA kosong di cakupan tab → tetap statis)
+- API disinkronkan (semua fallback ke baseline bila belum ada LRA):
+  - /api/apbd: baris TA berjalan (tahun terbesar) — kolom APBD pendapatan/belanja/penerimaan/pengeluaran pembiayaan dihitung ulang dari LRA (prefix 4/5/6.1|6/6.2|6); APBDP (perubahan) tetap baseline; + meta
+  - /api/pendapatan: 2026 dari LRA level jenis group PENDAPATAN; 2025 baseline; + meta
+  - /api/belanja: tab ops/mdl/ttdg/tf (prefix 5.1-5.4, level jenis) tersinkron; tab urusan tetap baseline (tanpa padanan kode rekening); + meta
+  - /api/pembiayaan: terima (6.1) & keluar (6.2) level jenis tersinkron; + meta
+- UI: komponen baru lra-sync-badge.tsx (LraSyncBadge) — banner hijau "Anggaran tahun berjalan tersinkron dengan LRA terimport (N OPD/SKPD) — s.d. X"; terpasang di 4 section (APBD, Pendapatan, Belanja, Pembiayaan); fetch tiap section diperbarui utk membawa meta; tabel & grafik otomatis memakai nilai tersinkron
+- Verifikasi data riil (3 OPD terimport user: BKAD 323 baris periode 7, Dinas Kesehatan 233 periode 12, Kecamatan 109 periode 12): /api/apbd TA2026 pendapatan 973.840.871.515 & belanja 327.898.317.497 — PERSIS sama dgn agregat /api/realisasi/akun (kode 4 = 973.840.871.515, totalApbd = 327.898.317.497); pendapatan 4.1.02=10.349.384.365, belanja 5.1.01=85.598.807.836, pembiayaan 6.1.01=103.796.664.924 (termasuk sen dari data asli); TA2025 baseline tak berubah; browser: badge tersinkron tampil di 4 section + nilai LRA di tabel/grafik; tanpa error console; lint bersih
+
+Stage Summary:
+- Seluruh seksi anggaran (APBD, Pendapatan, Belanja, Pembiayaan) kini otomatis mengikuti data LRA yang masuk: anggaran tahun berjalan dihitung dari agregat LRA seluruh OPD (periode terbaru tiap OPD), tahun sebelumnya tetap baseline sebagai pembanding, badge hijau menandai status sinkron + jumlah OPD + periode; tanpa LRA tampilan kembali ke baseline — import LRA baru langsung tercermin di semua seksi
