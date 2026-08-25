@@ -8,6 +8,7 @@ const TEXT_FIELDS: Record<string, number> = {
   appName: 40,
   appTitle: 100,
   appDescription: 300,
+  govName: 100,
   brandText: 30,
   brandSubtext: 60,
   footerText: 200,

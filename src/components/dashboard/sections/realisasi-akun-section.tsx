@@ -14,6 +14,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { SectionHeading } from '@/components/dashboard/section-heading'
+import { useSettings } from '@/hooks/use-settings'
+import { DEFAULT_SETTINGS } from '@/lib/default-settings'
 import { Badge } from '@/components/ui/badge'
 import { useToday } from '@/hooks/use-today'
 import { levelBadge } from '@/lib/kode-akun'
@@ -71,6 +73,9 @@ const GROUPS = [
 ]
 
 export function RealisasiAkunSection() {
+  const settingsQuery = useSettings()
+  const govName = settingsQuery.data?.govName ?? DEFAULT_SETTINGS.govName
+
   const { periode } = usePeriodeFilter()
 
   const { data, isLoading, isError } = useQuery({
@@ -120,7 +125,7 @@ export function RealisasiAkunSection() {
 
       <SectionHeading
         title="Realisasi Anggaran"
-        subtitle="Pemerintah Provinsi DKI Jakarta"
+        subtitle={govName}
         extra={
           date
             ? `Tahun Anggaran ${date.slice(0, 4)} — sampai dengan: ${formatDateFromISO(date)}`

@@ -23,6 +23,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { SectionHeading } from '@/components/dashboard/section-heading'
+import { useSettings } from '@/hooks/use-settings'
+import { DEFAULT_SETTINGS } from '@/lib/default-settings'
 import { LraSyncBadge, type LraSyncMetaDto } from '@/components/dashboard/lra-sync-badge'
 import { formatRupiah, formatRupiah0 } from '@/lib/format'
 import type { BudgetItemDto, BudgetTabDto } from '@/types/budget'
@@ -51,6 +53,9 @@ async function fetchBelanja(): Promise<{ tabs: BudgetTabDto[]; meta?: LraSyncMet
 }
 
 export function BelanjaSection() {
+  const settingsQuery = useSettings()
+  const govName = settingsQuery.data?.govName ?? DEFAULT_SETTINGS.govName
+
   const [tab, setTab] = useState<TabKey>('ops')
   const { data, isLoading, isError } = useQuery({
     queryKey: ['belanja'],
@@ -90,7 +95,7 @@ export function BelanjaSection() {
 
   return (
     <div>
-      <SectionHeading title="Anggaran Belanja" subtitle="Pemerintah Provinsi DKI Jakarta" />
+      <SectionHeading title="Anggaran Belanja" subtitle={govName} />
       {isError && (
         <p className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
           Gagal memuat data belanja.

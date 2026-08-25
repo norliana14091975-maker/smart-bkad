@@ -5,9 +5,13 @@ import type { ApbdSummaryDto } from '@/types/budget'
 
 /**
  * Ringkasan APBD tahunan untuk dashboard publik.
- * Baris tahun anggaran berjalan (tahun terbesar) disinkronkan dengan data
- * LRA yang masuk (agregat seluruh OPD pada periode terakhir masing-masing):
- * kolom APBD dihitung ulang dari LRA; APBDP (perubahan) tetap dari baseline.
+ *
+ * Aturan sinkronisasi APBD Murni / APBD Perubahan (APBDP) pada tahun anggaran
+ * berjalan sesuai data LRA yang masuk:
+ * - Kolom APBD  = anggaran MURNI (baseline) — tidak diubah oleh import.
+ * - Kolom APBDP = anggaran hasil import LRA (anggaran PERUBAHAN) — bila LRA
+ *   diimport dan anggarannya berbeda dari murni, penambahan/pengurangan
+ *   otomatis terkategori di APBDP. Bila tidak ada LRA, APBDP tetap baseline.
  */
 export async function GET() {
   try {
@@ -30,23 +34,41 @@ export async function GET() {
         }
       }
 
-      // Sinkronisasi anggaran TA berjalan dari LRA terimport
-      const pendApbd = lraTotal(sync.rows, '4', 'anggaran')
-      const belApbd = lraTotal(sync.rows, '5', 'anggaran')
+      // Anggaran hasil import LRA (kandidat APBDP / perubahan)
+      const pendLra = lraTotal(sync.rows, '4', 'anggaran')
+      const belLra = lraTotal(sync.rows, '5', 'anggaran')
       const has61 = sync.rows.some((x) => x.code === '6.1' || x.code.startsWith('6.1.'))
       const has62 = sync.rows.some((x) => x.code === '6.2' || x.code.startsWith('6.2.'))
-      const terApbd = lraTotal(sync.rows, has61 ? '6.1' : '6', 'anggaran')
-      const kelApbd = lraTotal(sync.rows, has62 ? '6.2' : '6', 'anggaran')
-      if (pendApbd !== null || belApbd !== null || terApbd !== null || kelApbd !== null) {
+      const terLra = lraTotal(sync.rows, has61 ? '6.1' : '6', 'anggaran')
+      const kelLra = lraTotal(sync.rows, has62 ? '6.2' : '6', 'anggaran')
+      if (pendLra !== null || belLra !== null || terLra !== null || kelLra !== null) {
         synced = true
       }
 
+      // APBDP = anggaran import bila ada (perubahan); APBD murni tetap baseline.
+      // Bila anggaran import sama dengan murni (tidak berubah), pertahankan
+      // APBDP baseline agar tidak menimpa data perubahan resmi.
+      const perubahan = (lra: number | null, murni: number, apbdpBaseline: number) =>
+        lra !== null && lra !== murni ? lra : apbdpBaseline
+
       return {
         year: r.year,
-        pendapatan: { apbd: pendApbd ?? r.pendapatanApbd, apbdp: r.pendapatanApbdp },
-        belanja: { apbd: belApbd ?? r.belanjaApbd, apbdp: r.belanjaApbdp },
-        penerimaanPembiayaan: { apbd: terApbd ?? r.terimaApbd, apbdp: r.terimaApbdp },
-        pengeluaranPembiayaan: { apbd: kelApbd ?? r.keluarApbd, apbdp: r.keluarApbdp },
+        pendapatan: {
+          apbd: r.pendapatanApbd,
+          apbdp: perubahan(pendLra, r.pendapatanApbd, r.pendapatanApbdp),
+        },
+        belanja: {
+          apbd: r.belanjaApbd,
+          apbdp: perubahan(belLra, r.belanjaApbd, r.belanjaApbdp),
+        },
+        penerimaanPembiayaan: {
+          apbd: r.terimaApbd,
+          apbdp: perubahan(terLra, r.terimaApbd, r.terimaApbdp),
+        },
+        pengeluaranPembiayaan: {
+          apbd: r.keluarApbd,
+          apbdp: perubahan(kelLra, r.keluarApbd, r.keluarApbdp),
+        },
       }
     })
 

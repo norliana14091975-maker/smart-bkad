@@ -4,6 +4,8 @@ import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { BudgetChart, type ChartRow } from '@/components/dashboard/budget-chart'
 import { SectionHeading } from '@/components/dashboard/section-heading'
+import { useSettings } from '@/hooks/use-settings'
+import { DEFAULT_SETTINGS } from '@/lib/default-settings'
 import { LraSyncBadge, type LraSyncMetaDto } from '@/components/dashboard/lra-sync-badge'
 import { formatRupiah } from '@/lib/format'
 import type { BudgetItemDto } from '@/types/budget'
@@ -24,6 +26,9 @@ async function fetchPendapatan(): Promise<{ items: BudgetItemDto[]; meta?: LraSy
 }
 
 export function PendapatanSection() {
+  const settingsQuery = useSettings()
+  const govName = settingsQuery.data?.govName ?? DEFAULT_SETTINGS.govName
+
   const { data, isLoading, isError } = useQuery({
     queryKey: ['pendapatan'],
     queryFn: fetchPendapatan,
@@ -60,7 +65,7 @@ export function PendapatanSection() {
     <div>
       <SectionHeading
         title="Anggaran Pendapatan"
-        subtitle="Pemerintah Provinsi DKI Jakarta"
+        subtitle={govName}
       />
       {isError && (
         <p className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">

@@ -23,6 +23,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { SectionHeading } from '@/components/dashboard/section-heading'
+import { useSettings } from '@/hooks/use-settings'
+import { DEFAULT_SETTINGS } from '@/lib/default-settings'
 import { LraSyncBadge, type LraSyncMetaDto } from '@/components/dashboard/lra-sync-badge'
 import { formatRupiah, formatRupiah0 } from '@/lib/format'
 import type { BudgetItemDto, BudgetTabDto } from '@/types/budget'
@@ -47,6 +49,9 @@ async function fetchPembiayaan(): Promise<{ tabs: BudgetTabDto[]; meta?: LraSync
 }
 
 export function PembiayaanSection() {
+  const settingsQuery = useSettings()
+  const govName = settingsQuery.data?.govName ?? DEFAULT_SETTINGS.govName
+
   const [tab, setTab] = useState<TabKey>('terima')
   const { data, isLoading, isError } = useQuery({
     queryKey: ['pembiayaan'],
@@ -85,7 +90,7 @@ export function PembiayaanSection() {
 
   return (
     <div>
-      <SectionHeading title="Anggaran Pembiayaan" subtitle="Pemerintah Provinsi DKI Jakarta" />
+      <SectionHeading title="Anggaran Pembiayaan" subtitle={govName} />
       {isError && (
         <p className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
           Gagal memuat data pembiayaan.

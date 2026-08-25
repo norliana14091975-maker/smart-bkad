@@ -147,6 +147,8 @@ export interface AppSettingsDto {
   appName: string
   appTitle: string
   appDescription: string
+  /** Nama pemerintah daerah — sub-judul di seluruh halaman */
+  govName: string
   brandText: string
   brandSubtext: string
   logoUrl: string | null

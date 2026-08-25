@@ -338,3 +338,18 @@ Work Log:
 
 Stage Summary:
 - Pojok kanan header kini punya pengaturan logo/lencana tersendiri (fallback emblem emas bawaan) dan warna header dapat diubah dari pengaturan (8 preset + warna kustom hex + kembali ke gradien biru bawaan) — semua kustomisasi user sebelumnya (logo utama, logo sidebar, favicon, teks) tidak terpengaruh
+
+---
+Task ID: 17
+Agent: Z.ai Code (main)
+Task: Globalisasi "Pemerintah Provinsi DKI Jakarta" ke Pengaturan Aplikasi (berlaku di semua) + rule APBDP untuk perubahan anggaran hasil import
+
+Work Log:
+- Setting baru govName (Nama Pemerintah Daerah, default "Pemerintah Provinsi DKI Jakarta", maks 100 karakter): types/default-settings/getSettings/PUT admin settings (TEXT_FIELDS)/form UI Pengaturan Aplikasi (dengan hint "Tampil sebagai sub-judul di seluruh halaman dashboard")
+- Globalisasi subtitle section: 6 section (APBD, Pendapatan, Belanja, Pembiayaan, Realisasi Per-Akun, Realisasi Per-SKPD) kini memakai useSettings() → settings.govName (fallback DEFAULT saat loading) — teks hardcoded "Pemerintah Provinsi DKI Jakarta" tidak ada lagi di komponen; govName disetel "Pemerintah Kabupaten Seruyan" (mengikuti kustomisasi user) dan bisa diubah kapan saja dari Pengaturan Aplikasi
+- Rule APBDP (/api/apbd ditulis ulang): tahun berjalan — kolom APBD = anggaran MURNI (baseline, TIDAK diubah import); kolom APBDP = anggaran hasil import LRA (perubahan) bila berbeda dari murni (penambahan/pengurangan otomatis terkategori APBDP); bila anggaran import sama dengan murni → APBDP baseline dipertahankan (tidak menimpa perubahan resmi); tanpa LRA → keduanya baseline
+- LraSyncBadge mendukung children kustom; badge APBD kini berbunyi "Anggaran perubahan (APBDP) tahun berjalan tersinkron dengan LRA terimport (N OPD/SKPD) — APBD murni tetap, anggaran hasil import masuk kategori APBDP (penambahan/pengurangan)"
+- Verifikasi: API — TA2026 APBD pendapatan 71.450.673.065.697 (murni, tetap) + APBDP 973.840.871.515 (= anggaran LRA) ✓; belanja APBD 74,28T murni + APBDP 327,9M ✓; browser — semua 6 section menampilkan "PEMERINTAH KABUPATEN SERUYAN" (mengikuti pengaturan), tabel APBD baris 2026 kolom APBD 71.450.673.065.697,00 vs APBDP 973.840.871.515,00, badge rule tampil; tanpa error console; lint bersih
+
+Stage Summary:
+- Nama pemerintah daerah kini satu pengaturan (govName) yang berlaku di semua halaman — tidak ada lagi teks DKI Jakarta yang statis; rule APBD Murni vs APBD Perubahan diterapkan pada sinkronisasi: import LRA mengubah anggaran → masuk kolom APBDP sebagai kategori perubahan (penambahan/pengurangan), APBD murni tidak pernah tertimpa

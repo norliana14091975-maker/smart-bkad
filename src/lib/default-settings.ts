@@ -9,6 +9,7 @@ export const DEFAULT_SETTINGS: AppSettingsDto = {
   appTitle: 'Dashboard Keuangan DKI',
   appDescription:
     'Dashboard Monitoring Pengelolaan Keuangan Daerah, Anggaran Pendapatan dan Belanja Daerah Pemerintah Provinsi DKI Jakarta',
+  govName: 'Pemerintah Provinsi DKI Jakarta',
   brandText: 'BPKD',
   brandSubtext: 'Provinsi DKI Jakarta',
   logoUrl: null,

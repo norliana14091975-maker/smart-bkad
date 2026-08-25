@@ -15,6 +15,7 @@ export async function getSettings(): Promise<AppSettingsDto> {
     appName: map.appName ?? DEFAULT_SETTINGS.appName,
     appTitle: map.appTitle ?? DEFAULT_SETTINGS.appTitle,
     appDescription: map.appDescription ?? DEFAULT_SETTINGS.appDescription,
+    govName: map.govName ?? DEFAULT_SETTINGS.govName,
     brandText: map.brandText ?? DEFAULT_SETTINGS.brandText,
     brandSubtext: map.brandSubtext ?? DEFAULT_SETTINGS.brandSubtext,
     logoUrl: map.logoUrl || null,

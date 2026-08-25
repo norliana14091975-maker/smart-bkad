@@ -3,6 +3,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { BudgetChart, type ChartRow } from '@/components/dashboard/budget-chart'
 import { SectionHeading } from '@/components/dashboard/section-heading'
+import { useSettings } from '@/hooks/use-settings'
+import { DEFAULT_SETTINGS } from '@/lib/default-settings'
 import { LraSyncBadge, type LraSyncMetaDto } from '@/components/dashboard/lra-sync-badge'
 import type { ApbdSummaryDto } from '@/types/budget'
 
@@ -34,6 +36,9 @@ async function fetchApbd(): Promise<{ data: ApbdSummaryDto[]; meta?: LraSyncMeta
 }
 
 export function ApbdSection() {
+  const settingsQuery = useSettings()
+  const govName = settingsQuery.data?.govName ?? DEFAULT_SETTINGS.govName
+
   const { data, isLoading, isError } = useQuery({
     queryKey: ['apbd'],
     queryFn: fetchApbd,
@@ -61,7 +66,7 @@ export function ApbdSection() {
     <div>
       <SectionHeading
         title="Anggaran Pendapatan dan Belanja Daerah"
-        subtitle="Pemerintah Provinsi DKI Jakarta"
+        subtitle={govName}
       />
       {isError && (
         <p className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
@@ -69,7 +74,14 @@ export function ApbdSection() {
         </p>
       )}
 
-      <LraSyncBadge meta={data?.meta} />
+      <LraSyncBadge meta={data?.meta}>
+        Anggaran perubahan (APBDP) tahun berjalan tersinkron dengan LRA terimport
+        {data?.meta && data.meta.opdCount > 0 && <>&nbsp;({data.meta.opdCount} OPD/SKPD)</>}
+        <span className="font-normal text-emerald-800">
+          &nbsp;— APBD murni tetap, anggaran hasil import masuk kategori APBDP
+          (penambahan/pengurangan)
+        </span>
+      </LraSyncBadge>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-5">
         <BudgetChart
           title="Anggaran Pendapatan"

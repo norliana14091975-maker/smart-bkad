@@ -28,6 +28,7 @@ type TextKey =
   | 'appName'
   | 'appTitle'
   | 'appDescription'
+  | 'govName'
   | 'brandText'
   | 'brandSubtext'
   | 'footerText'
@@ -73,6 +74,13 @@ const TEXT_FIELDS: {
     max: 300,
     textarea: true,
     hint: 'Meta description untuk mesin pencari.',
+  },
+  {
+    key: 'govName',
+    label: 'Nama Pemerintah Daerah',
+    placeholder: 'Pemerintah Kabupaten Seruyan',
+    max: 100,
+    hint: 'Tampil sebagai sub-judul di seluruh halaman dashboard.',
   },
   {
     key: 'brandText',
