@@ -42,6 +42,7 @@ model BudgetItem {
 // scope 'global' = konsolidasi, 'opd:<id>' = realisasi milik OPD tersebut.
 // periode = kumulatif s.d. bulan ke-N (1..12) sesuai LRA yang diimpor
 // (Peraturan Menteri Dalam Negeri: LRA disampaikan bulanan, triwulanan, semesteran).
+// year = tahun anggaran LRA sumber data (dibaca dari dokumen saat import).
 model RealisasiAkun {
   id        Int    @id @default(autoincrement())
   code      String
@@ -52,19 +53,22 @@ model RealisasiAkun {
   opdId     Int?
   opd       Opd?   @relation(fields: [opdId], references: [id], onDelete: Cascade)
   periode   Int    @default(12)
+  year      Int    @default(2026) @map("year")
   anggaran  Float
   realisasi Float
 
-  @@unique([code, scope, periode])
-  @@index([scope, periode])
+  @@unique([code, scope, periode, year])
+  @@index([scope, periode, year])
   @@map("realisasi_akun")
 }
 
 // Ringkasan realisasi per SKPD per periode (kumulatif s.d. bulan ke-N)
+// pada tahun anggaran tertentu (year).
 model RealisasiSkpdPeriode {
   id                  Int    @id @default(autoincrement())
   name                String
   periode             Int
+  year                Int    @default(2026) @map("year")
   pendapatanAnggaran  Float  @map("pendapatan_anggaran")
   pendapatanRealisasi Float  @map("pendapatan_realisasi")
   belanjaAnggaran     Float  @map("belanja_anggaran")
@@ -72,14 +76,17 @@ model RealisasiSkpdPeriode {
   pembiayaanAnggaran  Float  @map("pembiayaan_anggaran")
   pembiayaanRealisasi Float  @map("pembiayaan_realisasi")
 
-  @@unique([name, periode])
+  @@unique([name, periode, year])
+  @@index([name, year])
   @@map("realisasi_skpd_periode")
 }
 
-// Realisasi anggaran per SKPD (tahun berjalan)
+// Realisasi anggaran per SKPD (ringkasan tahun anggaran tertentu;
+// menampilkan periode TERAKHIR yang tersedia pada tahun tsb)
 model RealisasiSkpd {
   id                  Int    @id @default(autoincrement())
-  name                String @unique
+  name                String
+  year                Int    @default(2026) @map("year")
   pendapatanAnggaran  Float  @map("pendapatan_anggaran")
   pendapatanRealisasi Float  @map("pendapatan_realisasi")
   belanjaAnggaran     Float  @map("belanja_anggaran")
@@ -87,6 +94,7 @@ model RealisasiSkpd {
   pembiayaanAnggaran  Float  @map("pembiayaan_anggaran")
   pembiayaanRealisasi Float  @map("pembiayaan_realisasi")
 
+  @@unique([name, year])
   @@map("realisasi_skpd")
 }
 
@@ -160,6 +168,7 @@ model ImportLog {
   opdId       Int?
   opd         Opd?     @relation(fields: [opdId], references: [id], onDelete: SetNull)
   periode     Int      @default(12) // kumulatif s.d. bulan ke-N
+  year        Int      @default(2026) @map("year") // tahun anggaran LRA (terdeteksi/manual)
   createdAt   DateTime @default(now())
 
   @@map("import_log")

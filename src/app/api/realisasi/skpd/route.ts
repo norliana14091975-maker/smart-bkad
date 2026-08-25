@@ -3,9 +3,11 @@ import { db } from '@/lib/db'
 import type { RealisasiSkpdDto } from '@/types/budget'
 
 /**
- * Realisasi per SKPD untuk dashboard publik. Setiap baris menyertakan
- * `opdId` bila terdapat OPD terdaftar dengan nama yang sama — dipakai
- * untuk fitur detail (drill-down rincian per-akun milik SKPD tersebut).
+ * Realisasi per SKPD untuk dashboard publik. Data mengikuti TAHUN ANGGARAN
+ * TERBARU per SKPD (tahun anggaran dibaca dari dokumen LRA saat import;
+ * ringkasan tahun lama tersimpan sebagai pembanding). Setiap baris
+ * menyertakan `opdId` bila terdapat OPD terdaftar dengan nama yang sama —
+ * dipakai untuk fitur detail (drill-down rincian per-akun milik SKPD tsb).
  */
 export async function GET(request: NextRequest) {
   const search = request.nextUrl.searchParams.get('q')?.trim().toLowerCase() ?? ''
@@ -16,7 +18,14 @@ export async function GET(request: NextRequest) {
     ])
     const opdByName = new Map(opds.map((o) => [o.name, o.id]))
 
-    let data: (RealisasiSkpdDto & { opdId: number | null })[] = rows.map((r) => ({
+    // Ambil ringkasan tahun anggaran TERBARU per nama SKPD
+    const latestByYear = new Map<string, typeof rows[number]>()
+    for (const r of rows) {
+      const cur = latestByYear.get(r.name)
+      if (!cur || r.year > cur.year) latestByYear.set(r.name, r)
+    }
+
+    let data: (RealisasiSkpdDto & { opdId: number | null })[] = [...latestByYear.values()].map((r) => ({
       name: r.name,
       opdId: opdByName.get(r.name) ?? null,
       pendapatan: { anggaran: r.pendapatanAnggaran, realisasi: r.pendapatanRealisasi },

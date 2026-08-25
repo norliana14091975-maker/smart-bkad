@@ -85,6 +85,10 @@ export interface RealisasiAkunRowDto {
   group: string
   level: number
   opdName: string | null
+  /** Tahun anggaran LRA sumber baris (dibaca dari dokumen saat import) */
+  year: number
+  /** Periode kumulatif s.d. bulan ke-N */
+  periode: number
   anggaran: number
   realisasi: number
 }
@@ -120,6 +124,13 @@ export interface ImportParseResultDto {
   pages: number
   opdId: number | null
   opdName: string | null
+  /** Tahun anggaran LRA (terdeteksi dari dokumen / manual / default) */
+  year: number
+  /** Sumber tahun: 'deteksi' (dari PDF), 'manual' (input user), 'default' */
+  yearSource?: 'deteksi' | 'manual' | 'default'
+  /** Periode kumulatif LRA (bulan ke-1..12) */
+  periode: number
+  periodeLabel: string | null
   items: ImportItemDto[]
   stats: ImportStatsDto
   textPreview: string
@@ -141,6 +152,10 @@ export interface ImportLogDto {
   status: string
   message: string | null
   opdName: string | null
+  /** Tahun anggaran LRA (dibaca dari dokumen saat import) */
+  year: number
+  /** Periode kumulatif s.d. bulan ke-N */
+  periode: number
   createdAt: string
 }
 
@@ -208,6 +223,8 @@ export interface OpdSelfDto {
   /** Ringkasan per periode kumulatif (s.d. bulan ke-N) hasil import LRA */
   realisasiPeriode?: {
     periode: number
+    /** Tahun anggaran periode ini */
+    year: number
     pendapatan: { anggaran: number; realisasi: number }
     belanja: { anggaran: number; realisasi: number }
     pembiayaan: { anggaran: number; realisasi: number }

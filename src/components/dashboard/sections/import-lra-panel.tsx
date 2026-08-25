@@ -36,7 +36,7 @@ import { levelBadge } from '@/lib/kode-akun'
 import { AkunUraian } from '@/components/dashboard/akun-uraian'
 import { useLevelFilter } from '@/hooks/use-level-filter'
 import { LevelFilterControls } from '@/components/dashboard/level-filter-controls'
-import { periodePilihanImport, periodeLabel } from '@/lib/periode'
+import { periodePilihanImport, periodeLabel, yearPilihanImport } from '@/lib/periode'
 import { formatPct, formatRupiah } from '@/lib/format'
 import type {
   ImportItemDto,
@@ -94,6 +94,8 @@ export function ImportLraPanel({ mode }: { mode: 'admin' | 'opd' }) {
   const [selectedOpdId, setSelectedOpdId] = useState('') // '' = konsolidasi
   // periode import: '' = deteksi otomatis dari teks LRA (header "Sampai 31 …")
   const [importPeriode, setImportPeriode] = useState('')
+  // tahun anggaran import: '' = baca otomatis dari teks LRA ("TAHUN ANGGARAN …")
+  const [importYear, setImportYear] = useState('')
   const [uploading, setUploading] = useState(false)
   const [result, setResult] = useState<ImportParseResultDto | null>(null)
   const [saveMode, setSaveMode] = useState<'replace' | 'append'>('replace')
@@ -121,6 +123,7 @@ export function ImportLraPanel({ mode }: { mode: 'admin' | 'opd' }) {
       fd.append('file', file)
       if (mode === 'admin' && selectedOpdId) fd.append('opdId', selectedOpdId)
       if (importPeriode) fd.append('periode', importPeriode)
+      if (importYear) fd.append('year', importYear)
       const res = await fetch(`${base}/lra`, { method: 'POST', body: fd })
       const json = (await res.json()) as { data?: ImportParseResultDto; error?: string }
       if (!res.ok || !json.data) {
@@ -153,6 +156,7 @@ export function ImportLraPanel({ mode }: { mode: 'admin' | 'opd' }) {
         items: result.items,
         mode: saveMode,
         periode: result.periode,
+        year: result.year,
       }
       if (mode === 'admin' && selectedOpdId) body.opdId = Number(selectedOpdId)
       const res = await fetch(`${base}/confirm`, {
@@ -170,7 +174,7 @@ export function ImportLraPanel({ mode }: { mode: 'admin' | 'opd' }) {
             : 'konsolidasi seluruh OPD'
       toast({
         title: 'Import LRA berhasil',
-        description: `${json.data.saved} baris tersimpan untuk ${target} — periode ${
+        description: `${json.data.saved} baris tersimpan untuk ${target} — TA ${result.year}, periode ${
           result.periodeLabel ?? 'setahun'
         }.`,
       })
@@ -252,8 +256,26 @@ export function ImportLraPanel({ mode }: { mode: 'admin' | 'opd' }) {
         </div>
       )}
 
-      {/* Pemilih periode import (bulan kumulatif LRA) */}
+      {/* Pemilih periode & tahun anggaran import */}
       <div className="mb-4 flex flex-wrap items-end gap-3 rounded-lg border bg-muted/30 px-4 py-3">
+        <div>
+          <Label htmlFor="import-year" className="mb-1 block text-sm font-semibold text-foreground">
+            Tahun Anggaran LRA
+          </Label>
+          <select
+            id="import-year"
+            value={importYear}
+            onChange={(e) => setImportYear(e.target.value)}
+            className="h-9 w-48 rounded-md border border-input bg-background px-3 text-sm focus:border-[#17408b] focus:outline-none"
+          >
+            <option value="">Baca otomatis dari PDF</option>
+            {yearPilihanImport().map((y) => (
+              <option key={y} value={String(y)}>
+                TA {y}
+              </option>
+            ))}
+          </select>
+        </div>
         <div>
           <Label htmlFor="import-periode" className="mb-1 block text-sm font-semibold text-foreground">
             Periode LRA (kumulatif s.d. bulan)
@@ -273,9 +295,10 @@ export function ImportLraPanel({ mode }: { mode: 'admin' | 'opd' }) {
           </select>
         </div>
         <p className="max-w-xs text-[11px] leading-snug text-muted-foreground">
-          Sistem membaca header LRA (mis. “Sampai 31 Juli 2026”) untuk menentukan periode
-          otomatis. Pilih manual bila perlu. Import pada periode berbeda tersimpan terpisah
-          sehingga bisa dibandingkan (bulanan/triwulan/semester).
+          Sistem membaca judul LRA (mis. “TAHUN ANGGARAN 2026”) untuk menentukan
+          tahun anggaran secara otomatis, dan header periode (mis. “Sampai 31
+          Juli 2026”). Pilih manual bila perlu. Import tahun/periode berbeda
+          tersimpan terpisah sebagai data pembanding.
         </p>
       </div>
 
@@ -353,6 +376,20 @@ export function ImportLraPanel({ mode }: { mode: 'admin' | 'opd' }) {
               className={result.opdName ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'}
             >
               {result.opdName ? `OPD: ${result.opdName}` : 'Konsolidasi (seluruh OPD)'}
+            </Badge>
+            <Badge
+              variant="secondary"
+              className="bg-teal-100 text-teal-800"
+              title={
+                result.yearSource === 'deteksi'
+                  ? `Tahun anggaran terbaca dari dokumen LRA`
+                  : result.yearSource === 'manual'
+                    ? 'Tahun anggaran ditetapkan manual'
+                    : 'Tahun anggaran tidak terbaca — memakai tahun berjalan'
+              }
+            >
+              TA {result.year}
+              {result.yearSource === 'deteksi' && ' (terdeteksi)'}
             </Badge>
             {result.periodeLabel && (
               <Badge variant="secondary" className="bg-purple-100 text-purple-800">
@@ -485,6 +522,8 @@ export function ImportLraPanel({ mode }: { mode: 'admin' | 'opd' }) {
               <TableRow>
                 <TableHead>File</TableHead>
                 <TableHead>OPD/SKPD</TableHead>
+                <TableHead>Tahun</TableHead>
+                <TableHead>Periode</TableHead>
                 <TableHead className="text-right">Halaman</TableHead>
                 <TableHead className="text-right">Baris</TableHead>
                 <TableHead>Status</TableHead>
@@ -496,7 +535,7 @@ export function ImportLraPanel({ mode }: { mode: 'admin' | 'opd' }) {
               {logsQuery.isLoading ? (
                 [1, 2, 3].map((i) => (
                   <TableRow key={i}>
-                    <TableCell colSpan={7}>
+                    <TableCell colSpan={9}>
                       <Skeleton className="h-5 w-full" />
                     </TableCell>
                   </TableRow>
@@ -513,6 +552,14 @@ export function ImportLraPanel({ mode }: { mode: 'admin' | 'opd' }) {
                       ) : (
                         <span className="text-xs text-muted-foreground">Konsolidasi</span>
                       )}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary" className="bg-teal-100 text-teal-800">
+                        TA {log.year}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                      {periodeLabel(log.periode)}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">{log.pages}</TableCell>
                     <TableCell className="text-right tabular-nums">{log.records}</TableCell>
@@ -548,7 +595,7 @@ export function ImportLraPanel({ mode }: { mode: 'admin' | 'opd' }) {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-6 text-center text-muted-foreground">
+                  <TableCell colSpan={9} className="py-6 text-center text-muted-foreground">
                     Belum ada riwayat import.
                   </TableCell>
                 </TableRow>

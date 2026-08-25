@@ -41,6 +41,7 @@ import { AkunUraian } from '@/components/dashboard/akun-uraian'
 import { useLevelFilter } from '@/hooks/use-level-filter'
 import { LevelFilterControls } from '@/components/dashboard/level-filter-controls'
 import { formatPct, formatRupiah, formatRupiah0 } from '@/lib/format'
+import { periodeLabel } from '@/lib/periode'
 import type { RealisasiAkunRowDto, RealisasiSkpdRowDto } from '@/types/budget'
 
 async function fetchAkun(): Promise<RealisasiAkunRowDto[]> {
@@ -187,6 +188,7 @@ function AkunTable() {
                 <TableHead>Level</TableHead>
                 <TableHead>Grup</TableHead>
                 <TableHead>OPD</TableHead>
+                <TableHead>Tahun</TableHead>
                 <TableHead className="text-right">Anggaran</TableHead>
                 <TableHead className="text-right">Realisasi</TableHead>
                 <TableHead className="w-24 text-right">Aksi</TableHead>
@@ -196,7 +198,7 @@ function AkunTable() {
               {isLoading ? (
                 [1, 2, 3].map((i) => (
                   <TableRow key={i}>
-                    <TableCell colSpan={8}>
+                    <TableCell colSpan={9}>
                       <Skeleton className="h-5 w-full" />
                     </TableCell>
                   </TableRow>
@@ -230,6 +232,11 @@ function AkunTable() {
                       ) : (
                         <span className="text-muted-foreground">Konsolidasi</span>
                       )}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      <Badge variant="secondary" className="bg-teal-100 text-teal-800" title={periodeLabel(row.periode)}>
+                        TA {row.year}
+                      </Badge>
                     </TableCell>
                     <TableCell className="text-right tabular-nums">{formatRupiah(row.anggaran)}</TableCell>
                     <TableCell className="text-right tabular-nums">

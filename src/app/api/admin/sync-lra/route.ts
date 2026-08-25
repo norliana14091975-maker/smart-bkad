@@ -91,7 +91,9 @@ export async function GET() {
     if (!user) return unauthorized()
 
     const sync = await getLraSync()
-    const year = new Date().getFullYear()
+    // Tahun anggaran target = tahun LRA terbaru (dibaca dari dokumen saat
+    // import), fallback tahun kalender berjalan
+    const year = sync.year ?? new Date().getFullYear()
     const plan = sync.available ? buildPlan(sync.rows, year) : null
     const existingYearItems = plan
       ? await db.budgetItem.count({ where: { year: plan.year } })
@@ -103,6 +105,7 @@ export async function GET() {
         mode: sync.mode,
         opdCount: sync.opdCount,
         opdNames: sync.opdNames,
+        year: sync.year,
         periode: sync.periode,
         periodeLabel: sync.periodeLabel,
         plan,
@@ -133,9 +136,12 @@ export async function POST(req: Request) {
     }
 
     const body = (await req.json().catch(() => ({}))) as { year?: unknown }
+    // Tahun anggaran target: dari body (override manual), bila kosong
+    // mengikuti TAHUN LRA yang dibaca dari dokumen saat import — bukan
+    // tahun kalender — agar data pembanding jatuh pada tahun yang benar
     const year =
       body.year === undefined || body.year === null || body.year === ''
-        ? new Date().getFullYear()
+        ? (sync.year ?? new Date().getFullYear())
         : Number(body.year)
     if (!Number.isInteger(year) || year < 2000 || year > 2100) {
       return NextResponse.json({ error: 'Tahun anggaran tidak valid' }, { status: 400 })

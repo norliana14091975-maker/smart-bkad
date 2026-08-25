@@ -77,6 +77,70 @@ export function periodePilihanImport(): PeriodePilihan[] {
 }
 
 /**
+ * Daftar pilihan tahun anggaran untuk import LRA:
+ * beberapa tahun ke belakang s.d. tahun depan (LRA menyusul awal tahun).
+ */
+export function yearPilihanImport(): number[] {
+  const now = new Date().getFullYear()
+  const years: number[] = []
+  for (let y = now - 4; y <= now + 1; y++) years.push(y)
+  return years.reverse() // terbaru lebih dulu
+}
+
+/**
+ * Deteksi TAHUN ANGGARAN dari teks LRA. Prioritas pola (paling eksplisit
+ * terlebih dahulu) — semua case-insensitive:
+ * 1. "TAHUN ANGGARAN 2026" / "Tahun Anggaran : 2026"
+ * 2. "TA 2026" / "TA. 2026"
+ * 3. Rentang periode "01 Januari 2026 Sampai 31 Juli 2026" (tahun awal)
+ * 4. Kepala kolom "ANGGARAN 2026"
+ * 5. "s.d. 31 Juli 2026"
+ * Mengembalikan null bila tidak ditemukan (pemanggil memakai pilihan manual /
+ * tahun kalender berjalan).
+ */
+export function detectTahun(text: string): number | null {
+  const valid = (y: number | undefined): number | null =>
+    y !== undefined && Number.isInteger(y) && y >= 2000 && y <= 2100 ? y : null
+
+  // 1) "TAHUN ANGGARAN 2026" — judul standar LRA
+  let m = /tah?un?\s*anggaran\s*:?\s*((?:19|20)\d{2})/i.exec(text)
+  if (m) {
+    const y = valid(Number(m[1]))
+    if (y) return y
+  }
+
+  // 2) "TA 2026" / "TA. 2026"
+  m = /\bTA\.?\s*((?:19|20)\d{2})\b/.exec(text)
+  if (m) {
+    const y = valid(Number(m[1]))
+    if (y) return y
+  }
+
+  // 3) Rentang periode: "01 Januari 2026 Sampai 31 Juli 2026"
+  m = /\d{1,2}\s+\S+\s+((?:19|20)\d{2})\s+(?:sampai|s\.?d\.?|sd\.?)/i.exec(text)
+  if (m) {
+    const y = valid(Number(m[1]))
+    if (y) return y
+  }
+
+  // 4) Kepala kolom "ANGGARAN 2026" (bukan "REALISASI <tahun sebelumnya>")
+  m = /\banggaran\s+((?:19|20)\d{2})\b/i.exec(text)
+  if (m) {
+    const y = valid(Number(m[1]))
+    if (y) return y
+  }
+
+  // 5) "s.d. 31 Juli 2026"
+  m = /(?:sampai|s\.?d\.?|sd\.?)\s*(?:tgl\.?\s*)?\d{1,2}\s+\S+\s+((?:19|20)\d{2})/i.exec(text)
+  if (m) {
+    const y = valid(Number(m[1]))
+    if (y) return y
+  }
+
+  return null
+}
+
+/**
  * Deteksi periode dari teks LRA: cari pola "01 Januari 2026 Sampai 31 Juli 2026"
  * atau "s.d. 31 Juli 2026" / "s.d Juli 2026" — bulan akhir = periode.
  * Mengembalikan null bila tidak ditemukan (pemanggil memakai pilihan manual).

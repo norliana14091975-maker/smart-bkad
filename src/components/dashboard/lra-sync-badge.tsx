@@ -5,6 +5,8 @@ import { RefreshCw, ShieldAlert } from 'lucide-react'
 export interface LraSyncMetaDto {
   synced: boolean
   opdCount: number
+  /** Tahun anggaran LRA yang menjadi sumber sinkronisasi */
+  year?: number | null
   periodeLabel: string | null
   /** True bila tidak ada data realisasi (LRA) sama sekali — anggaran mengikuti 0 */
   noRealisasi?: boolean
@@ -45,6 +47,7 @@ export function LraSyncBadge({
           {meta.opdCount > 0 && <>&nbsp;({meta.opdCount} OPD/SKPD)</>}
         </>
       )}
+      {meta.year && <span className="font-normal text-emerald-800">&nbsp;— TA {meta.year}</span>}
       {meta.periodeLabel && <span className="font-normal text-emerald-800">&nbsp;— {meta.periodeLabel}</span>}
     </p>
   )

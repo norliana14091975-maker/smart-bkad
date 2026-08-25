@@ -35,6 +35,8 @@ interface Meta {
   mode: 'opd' | 'aggregate' | 'global'
   opdCount: number
   opdNames: string[]
+  /** Tahun anggaran LRA terbaru (dibaca dari dokumen saat import) */
+  year: number | null
   periode: number | null
   periodeLabel: string | null
 }
@@ -163,11 +165,21 @@ export function RealisasiAkunSection() {
 
       <PeriodeFilterControls className="mb-4" />
 
-      {/* Label periode aktif */}
-      {meta?.periodeLabel && (
+      {/* Label tahun anggaran & periode aktif */}
+      {(meta?.year || meta?.periodeLabel) && (
         <p className="mb-3 flex flex-wrap items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-900">
           <CalendarRange className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-          Menampilkan realisasi kumulatif <strong>&nbsp;{meta.periodeLabel}</strong>
+          {meta?.year && (
+            <>
+              Tahun anggaran <strong>&nbsp;TA {meta.year}</strong>
+              {meta.periodeLabel && <>&nbsp;—&nbsp;</>}
+            </>
+          )}
+          {meta?.periodeLabel && (
+            <>
+              realisasi kumulatif <strong>&nbsp;{meta.periodeLabel}</strong>
+            </>
+          )}
         </p>
       )}
 

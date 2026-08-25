@@ -10,7 +10,7 @@ export async function GET() {
 
     const rows = await db.realisasiAkun.findMany({
       include: { opd: { select: { name: true } } },
-      orderBy: [{ scope: 'asc' }, { code: 'asc' }],
+      orderBy: [{ scope: 'asc' }, { year: 'desc' }, { code: 'asc' }],
     })
     const data = rows.map((r) => ({
       id: r.id,
@@ -19,6 +19,8 @@ export async function GET() {
       group: r.group,
       level: r.level,
       opdName: r.opd?.name ?? null,
+      year: r.year,
+      periode: r.periode,
       anggaran: r.anggaran,
       realisasi: r.realisasi,
     }))
@@ -68,6 +70,8 @@ export async function PUT(req: NextRequest) {
         group: row.group,
         level: row.level,
         opdName: row.opd?.name ?? null,
+        year: row.year,
+        periode: row.periode,
         anggaran: row.anggaran,
         realisasi: row.realisasi,
       },

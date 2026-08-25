@@ -6,9 +6,10 @@ import type { BudgetItemDto } from '@/types/budget'
 /**
  * Sinkronisasi anggaran (APBD / Pendapatan / Belanja / Pembiayaan) dengan
  * data LRA yang masuk (hasil import). Sumber: agregat seluruh OPD pada
- * periode TERAKHIR milik masing-masing; bila belum ada OPD yang mengimpor,
- * pakai data konsolidasi (scope global). Bila keduanya tidak ada, seksi
- * tetap memakai data statis (baseline).
+ * TAHUN ANGGARAN TERBARU; per OPD dipakai periode TERAKHIR pada tahun tsb.
+ * Bila belum ada OPD yang mengimpor, pakai data konsolidasi (scope global)
+ * pada tahun terbarunya. Bila keduanya tidak ada, seksi tetap memakai data
+ * statis (baseline).
  */
 
 export interface LraSyncRow {
@@ -25,6 +26,8 @@ export interface LraSyncInfo {
   mode: 'aggregate' | 'global'
   opdCount: number
   opdNames: string[]
+  /** Tahun anggaran LRA terbaru (dibaca dari dokumen saat import) */
+  year: number | null
   periode: number | null
   periodeLabel: string | null
   rows: LraSyncRow[]
@@ -34,14 +37,19 @@ export interface LraSyncInfo {
 export async function getLraSync(): Promise<LraSyncInfo> {
   const all = await db.realisasiAkun.findMany()
 
-  const opdRows = all.filter((r) => r.scope !== 'global')
+  // Tahun anggaran terbaru yang tersedia (data tahun lama menjadi pembanding)
+  const maxYear = all.reduce((m, r) => Math.max(m, r.year), 0)
+  const inYear = maxYear > 0 ? all.filter((r) => r.year === maxYear) : []
+
+  const opdRows = inYear.filter((r) => r.scope !== 'global')
   let base
   let mode: 'aggregate' | 'global'
   const opdIds = new Set<number>()
 
   if (opdRows.length > 0) {
     mode = 'aggregate'
-    // Periode terakhir per OPD — anggaran versi terbarunya yang dipakai
+    // Periode terakhir per OPD pada tahun anggaran tsb — anggaran versi
+    // terbarunya yang dipakai
     const periodeByOpd = new Map<number, number>()
     for (const r of opdRows) {
       if (r.opdId) {
@@ -58,8 +66,8 @@ export async function getLraSync(): Promise<LraSyncInfo> {
     }
   } else {
     mode = 'global'
-    const maxP = all.reduce((m, r) => Math.max(m, r.periode), 0)
-    base = all.filter((r) => r.periode === maxP)
+    const maxP = inYear.reduce((m, r) => Math.max(m, r.periode), 0)
+    base = inYear.filter((r) => r.periode === maxP)
   }
 
   if (base.length === 0) {
@@ -68,6 +76,7 @@ export async function getLraSync(): Promise<LraSyncInfo> {
       mode,
       opdCount: 0,
       opdNames: [],
+      year: null,
       periode: null,
       periodeLabel: null,
       rows: [],
@@ -110,6 +119,7 @@ export async function getLraSync(): Promise<LraSyncInfo> {
     mode,
     opdCount: opdIds.size,
     opdNames,
+    year: maxYear > 0 ? maxYear : null,
     periode: periode || null,
     periodeLabel: periode ? labelPeriode(periode) : null,
     rows,
@@ -120,6 +130,8 @@ export async function getLraSync(): Promise<LraSyncInfo> {
 export interface LraSyncMeta {
   synced: boolean
   opdCount: number
+  /** Tahun anggaran LRA yang menjadi sumber sinkronisasi */
+  year?: number | null
   periodeLabel: string | null
   /** True bila tidak ada data realisasi (LRA) sama sekali — anggaran mengikuti 0 */
   noRealisasi?: boolean
@@ -129,6 +141,7 @@ export function metaFrom(sync: LraSyncInfo, synced: boolean): LraSyncMeta {
   return {
     synced: synced && sync.available,
     opdCount: sync.opdCount,
+    year: sync.year,
     periodeLabel: sync.periodeLabel,
     noRealisasi: !sync.available,
   }
@@ -167,8 +180,7 @@ export function lraTotal(
 export function syncTabItems(
   staticItems: BudgetItemDto[],
   sync: LraSyncInfo,
-  filter: ((r: LraSyncRow) => boolean) | null,
-  year?: number
+  filter: ((r: LraSyncRow) => boolean) | null
 ): { items: BudgetItemDto[]; apbdpItems: BudgetItemDto[] | null; synced: boolean } {
   // 1) Tidak ada data realisasi sama sekali → item anggaran mengikuti 0
   if (!sync.available) {
@@ -184,8 +196,10 @@ export function syncTabItems(
     return { items: staticItems, apbdpItems: null, synced: false }
   }
 
+  // Tahun anggaran pembanding: tahun LRA terbaru (dibaca dari dokumen);
+  // fallback tahun item anggaran statis terbaru.
   const currentYear =
-    year ?? staticItems.reduce((m, i) => Math.max(m, i.year), new Date().getFullYear())
+    sync.year ?? staticItems.reduce((m, i) => Math.max(m, i.year), new Date().getFullYear())
 
   const inScope = sync.rows
     .filter(filter)

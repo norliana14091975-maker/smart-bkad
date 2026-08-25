@@ -307,10 +307,12 @@ export function sumByPrefix(
 
 /**
  * Simpan hasil import LRA:
- * - mode 'replace': hapus seluruh baris pada scope lalu sisipkan semua
- * - mode 'append' : upsert per kode dalam scope
+ * - mode 'replace': hapus seluruh baris pada scope+tahun+periode lalu sisipkan
+ *   semua
+ * - mode 'append' : upsert per kode dalam scope+tahun+periode
  * - Untuk scope OPD: ringkasan RealisasiSkpd OPD ikut diperbarui dari
  *   total per kelompok (level terendah yang tersedia).
+ * `year` = tahun anggaran LRA (terdeteksi dari dokumen / ditetapkan manual).
  */
 export async function confirmLra(params: {
   items: unknown
@@ -320,9 +322,13 @@ export async function confirmLra(params: {
   importLogId: number
   /** Periode kumulatif LRA (bulan ke-1..12); default 12 */
   periode?: number
+  /** Tahun anggaran LRA; default tahun kalender berjalan */
+  year?: number
 }): Promise<{ saved: number }> {
   const { items, mode, scope, opdId, importLogId } = params
   const periode = Math.min(Math.max(Math.round(params.periode ?? 12), 1), 12)
+  const nowYear = new Date().getFullYear()
+  const year = Math.min(Math.max(Math.round(params.year ?? nowYear), 2000), 2100)
   if (!Array.isArray(items)) throw new Error('Data items tidak valid')
 
   const merged = new Map<string, LraItem>()
@@ -343,14 +349,16 @@ export async function confirmLra(params: {
     scope,
     opdId,
     periode,
+    year,
     anggaran: item.anggaran,
     realisasi: item.realisasi,
   }))
 
   let saved = 0
   if (mode === 'replace') {
-    // Hanya ganti baris pada periode yang sama (import periode lain tetap utuh)
-    await db.realisasiAkun.deleteMany({ where: { scope, periode } })
+    // Hanya ganti baris pada tahun+periode yang sama (import tahun/periode
+    // lain tetap utuh sebagai data pembanding)
+    await db.realisasiAkun.deleteMany({ where: { scope, periode, year } })
     if (rows.length > 0) {
       await db.realisasiAkun.createMany({ data: rows })
     }
@@ -358,7 +366,7 @@ export async function confirmLra(params: {
   } else {
     for (const row of rows) {
       await db.realisasiAkun.upsert({
-        where: { code_scope_periode: { code: row.code, scope, periode } },
+        where: { code_scope_periode_year: { code: row.code, scope, periode, year } },
         update: {
           name: row.name,
           group: row.group,
@@ -402,14 +410,15 @@ export async function confirmLra(params: {
         pembiayaanRealisasi: pembiayaan.realisasi,
       }
       await db.realisasiSkpdPeriode.upsert({
-        where: { name_periode: { name: opd.name, periode } },
+        where: { name_periode_year: { name: opd.name, periode, year } },
         update: ringkas,
-        create: { name: opd.name, periode, ...ringkas },
+        create: { name: opd.name, periode, year, ...ringkas },
       })
 
-      // Ringkasan utama menampilkan periode TERAKHIR yang tersedia utk OPD ini
+      // Ringkasan utama menampilkan periode TERAKHIR yang tersedia utk OPD
+      // ini PADA TAHUN ANGGARAN LRA yang sedang diimpor
       const terakhir = await db.realisasiSkpdPeriode.findFirst({
-        where: { name: opd.name },
+        where: { name: opd.name, year },
         orderBy: { periode: 'desc' },
       })
       if (terakhir) {
@@ -422,9 +431,9 @@ export async function confirmLra(params: {
           pembiayaanRealisasi: terakhir.pembiayaanRealisasi,
         }
         await db.realisasiSkpd.upsert({
-          where: { name: opd.name },
+          where: { name_year: { name: opd.name, year } },
           update: latest,
-          create: { name: opd.name, ...latest },
+          create: { name: opd.name, year, ...latest },
         })
       }
     }
@@ -432,7 +441,7 @@ export async function confirmLra(params: {
 
   await db.importLog.updateMany({
     where: { id: importLogId },
-    data: { status: 'confirmed', records: saved, periode },
+    data: { status: 'confirmed', records: saved, periode, year },
   })
 
   return { saved }

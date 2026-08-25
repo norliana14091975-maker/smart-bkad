@@ -40,8 +40,10 @@ function baselineRow(r: {
  * realisasi (LRA) yang masuk:
  * - Tidak ada data realisasi sama sekali → baris tahun anggaran berjalan
  *   mengikuti 0 (APBD & APBDP = 0), baris bila belum ada disintesis.
- * - LRA tersinkron → APBD = anggaran MURNI baseline (kategori dengan
- *   realisasi 0 → murni 0); APBDP = anggaran hasil import LRA.
+ * - LRA tersinkron → data LRA diterapkan pada baris TAHUN ANGGARAN LRA
+ *   (dibaca dari dokumen saat import) sebagai data pembanding tahun tsb:
+ *   APBD = anggaran MURNI baseline (kategori dengan realisasi 0 → murni 0);
+ *   APBDP = anggaran hasil import LRA.
  */
 export async function GET() {
   try {
@@ -58,6 +60,11 @@ export async function GET() {
       currentYear = agg._max.year ?? new Date().getFullYear()
     }
 
+    // Tahun pembanding LRA: tahun anggaran yang terbaca dari dokumen LRA
+    // terbaru — bukan tahun kalender — agar perubahan/realisasi diterapkan
+    // pada tahun anggaran yang benar
+    const targetYear = sync.available && sync.year ? sync.year : currentYear
+
     // Aturan realisasi 0: tidak ada baris LRA sama sekali → APBD mengikuti 0
     const realisasiKosong = !sync.available
 
@@ -65,8 +72,8 @@ export async function GET() {
     const data: ApbdSummaryDto[] = []
 
     for (const r of rows) {
-      if (r.year !== currentYear) {
-        // Tahun sebelumnya: baseline apa adanya
+      if (r.year !== targetYear) {
+        // Tahun selain tahun LRA: baseline apa adanya
         data.push(baselineRow(r))
         continue
       }
@@ -122,11 +129,11 @@ export async function GET() {
       })
     }
 
-    // Baris tahun berjalan belum ada di apbd_summary → sintesis
-    // (agar dashboard tetap menampilkan tahun berjalan, bukan kosong)
-    if (!rows.some((r) => r.year === currentYear)) {
+    // Baris tahun anggaran LRA belum ada di apbd_summary → sintesis
+    // (agar dashboard tetap menampilkan tahun tsb, bukan kosong)
+    if (!rows.some((r) => r.year === targetYear)) {
       if (realisasiKosong) {
-        data.push(zeroRow(currentYear))
+        data.push(zeroRow(targetYear))
       } else {
         // Dari LRA: kategori terealisasi → murni = anggaran LRA, else 0
         const pendLra = lraTotal(sync.rows, '4', 'anggaran')
@@ -149,7 +156,7 @@ export async function GET() {
         })
 
         data.push({
-          year: currentYear,
+          year: targetYear,
           pendapatan: dariLra(pendRea, pendLra),
           belanja: dariLra(belRea, belLra),
           penerimaanPembiayaan: dariLra(terRea, terLra),

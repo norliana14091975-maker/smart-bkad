@@ -5,8 +5,9 @@ import { confirmLra, scopeFor } from '@/lib/import-lra'
 
 /**
  * Konfirmasi hasil import LRA (admin). Body:
- * { importLogId, items, mode: 'replace' | 'append', opdId? }
- * opdId kosong → konsolidasi (scope global).
+ * { importLogId, items, mode: 'replace' | 'append', opdId?, periode?, year? }
+ * opdId kosong → konsolidasi (scope global). Tahun anggaran mengikuti body
+ * (bila dikirim panel import) atau log import hasil pembacaan PDF.
  */
 export async function POST(req: Request) {
   try {
@@ -14,7 +15,7 @@ export async function POST(req: Request) {
     if (!admin) return unauthorized()
 
     const body = (await req.json().catch(() => null)) as
-      | { importLogId?: unknown; items?: unknown; mode?: unknown; opdId?: unknown; periode?: unknown }
+      | { importLogId?: unknown; items?: unknown; mode?: unknown; opdId?: unknown; periode?: unknown; year?: unknown }
       | null
 
     const importLogId = Number(body?.importLogId)
@@ -53,6 +54,14 @@ export async function POST(req: Request) {
         ? periodeNum
         : (log.periode ?? 12)
 
+    // Tahun anggaran: dari body (hasil deteksi/override pada panel import),
+    // fallback tahun pada log import hasil pembacaan PDF
+    const yearNum = Number(body?.year)
+    const year =
+      Number.isInteger(yearNum) && yearNum >= 2000 && yearNum <= 2100
+        ? yearNum
+        : (log.year ?? new Date().getFullYear())
+
     const scope = scopeFor(opdId)
     const { saved } = await confirmLra({
       items: body?.items,
@@ -61,9 +70,10 @@ export async function POST(req: Request) {
       opdId,
       importLogId,
       periode,
+      year,
     })
 
-    return NextResponse.json({ data: { saved } })
+    return NextResponse.json({ data: { saved, periode, year } })
   } catch (error) {
     console.error('POST /api/admin/import/confirm error', error)
     return NextResponse.json({ error: 'Gagal menyimpan hasil import' }, { status: 500 })

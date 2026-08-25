@@ -27,6 +27,8 @@ interface SyncPreviewDto {
   mode: 'aggregate' | 'global'
   opdCount: number
   opdNames: string[]
+  /** Tahun anggaran LRA terbaru (dibaca dari dokumen saat import) */
+  year: number | null
   periode: number | null
   periodeLabel: string | null
   plan: SyncPlanDto | null
@@ -120,7 +122,9 @@ export function SyncLraButton({ size = 'sm' }: { size?: 'sm' | 'default' }) {
             <DialogTitle>Sinkronisasi Data dari LRA</DialogTitle>
             <DialogDescription>
               Mengambil anggaran dari LRA yang telah diimport ke item anggaran dan
-              ringkasan APBD tahun anggaran berjalan.
+              ringkasan APBD. Tahun anggaran target mengikuti tahun yang terbaca
+              dari dokumen LRA (bukan tahun kalender), sehingga data pembanding
+              jatuh pada tahun anggaran yang benar.
             </DialogDescription>
           </DialogHeader>
 
@@ -145,6 +149,15 @@ export function SyncLraButton({ size = 'sm' }: { size?: 'sm' | 'default' }) {
                     {preview.opdCount > 0
                       ? `${preview.opdCount} OPD/SKPD: ${preview.opdNames.join(', ')}`
                       : 'Data konsolidasi (global)'}
+                  </li>
+                  <li>
+                    Tahun anggaran:{' '}
+                    <span className="font-semibold text-foreground">
+                      TA {preview.plan?.year ?? preview.year ?? '-'}
+                    </span>
+                    {preview.plan && preview.year && preview.plan.year === preview.year && (
+                      <span className="ml-1">(terbaca dari dokumen LRA)</span>
+                    )}
                   </li>
                   <li>Periode realisasi: {preview.periodeLabel ?? '-'}</li>
                 </ul>

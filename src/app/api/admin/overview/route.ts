@@ -42,6 +42,8 @@ export async function GET() {
       records: r.records,
       status: r.status,
       message: r.message,
+      year: r.year,
+      periode: r.periode,
       createdAt: r.createdAt.toISOString(),
     }))
 

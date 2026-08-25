@@ -458,3 +458,29 @@ Work Log:
 
 Stage Summary:
 - Semua tabel yang menampilkan nama akun/OPD/dokumen kini memakai pola seragam AkunUraian: nama panjang otomatis TURUN ke baris berikutnya (multi-baris) alih-alih memanjang menyamping — kolom Anggaran/Realisasi/% selalu terlihat pada dialog fullscreen desktop & seluruh tabel publik/admin tanpa scroll horizontal; kunci teknis: override whitespace-nowrap warisan TableCell dengan whitespace-normal + break-words + max-width responsif per breakpoint
+
+---
+Task ID: 22
+Agent: Z.ai Code (main)
+Task: Import LRA membaca tahun anggaran dari dokumen untuk menyesuaikan tahun anggaran sebagai data pembanding
+
+Work Log:
+- Analisis akar masalah: import LRA hanya mendeteksi periode (bulan), tidak pernah membaca tahun anggaran; tabel realisasi_akun/import_log/realisasi_skpd* tanpa kolom tahun sehingga data TA 2025 (global, "LRA Desember 2025 BUD.pdf", skala DKI 1,1 T) tercampur dengan TA 2026 (Dinkes+BKAD periode 7); sync-lra memakai new Date().getFullYear()
+- Ekstrak teks PDF asli (upload/lra-kecamatan-suling-tambun-kab-seruyan.pdf) untuk memetakan penanda tahun: "TAHUN ANGGARAN 2026", "01 Januari 2026 Sampai 31 Juli 2026", kepala kolom "ANGGARAN 2026"
+- src/lib/periode.ts: tambah detectTahun(text) — prioritas: TAHUN ANGGARAN <y> → TA <y> → rentang "tgl bulan <y> Sampai" → kolom "ANGGARAN <y>" → "s.d. tgl bulan <y>"; validasi 2000..2100; tambah yearPilihanImport() untuk pilihan UI; uji 7 kasus via skrip bun (semua benar, termasuk tolak tahun 1800)
+- prisma/schema.prisma: kolom year Int @default(2026) di RealisasiAkun (unique [code,scope,periode,year]), RealisasiSkpdPeriode (unique [name,periode,year]), RealisasiSkpd (unique [name,year] menggantikan name @unique), ImportLog; backup DB ke /tmp/backup-pre-year.db; bun run db:push sukses; migrasi data lama via bun:sqlite: realisasi_akun scope global → year 2025 (sumber "LRA Desember 2025 BUD.pdf"), import_log test-lra/2025 → 2025, sisanya 2026
+- src/lib/import-lra.ts confirmLra(): param year (clamp 2000..2100); deleteMany/upsert kini menyertakan year (kunci code_scope_periode_year); ringkasan SKPD per periode & utama upsert per tahun (name_periode_year, name_year); import_log ikut menyimpan year
+- API import admin+opd (lra & confirm): form/body field year (manual, divalidasi); bila kosong → detectTahun(text), fallback tahun kalender; respons menambah year + yearSource ('deteksi'|'manual'|'default'); confirm mengembalikan {saved, periode, year}
+- src/lib/lra-sync.ts getLraSync(): pilih TAHUN TERBARU (max year) dulu, baru periode terakhir per OPD dalam tahun tsb; LraSyncInfo/LraSyncMeta +year; syncTabItems memakai sync.year sebagai tahun pembanding (param year dihapus)
+- /api/admin/sync-lra: GET & POST memakai sync.year (tahun LRA) sebagai default tahun target — bukan tahun kalender — agar data pembanding jatuh pada tahun anggaran yang benar
+- API publik year-aware: /api/apbd (targetYear = tahun LRA, sintesis baris tahun LRA bila belum ada), /api/realisasi/akun (filter tahun terbaru + meta.year + pembanding antar-periode difilter tahun aktif), /api/realisasi/skpd (ringkasan tahun terbaru per nama SKPD), /api/opd/me (findFirst orderBy year desc + periode tahun terbaru)
+- Types: ImportLogDto +year+periode, ImportParseResultDto +year+yearSource+periode, RealisasiAkunRowDto +year+periode, OpdSelfDto.realisasiPeriode +year; API logs (admin/opd), overview, admin/realisasi-akun mengembalikan year+periode
+- UI: ImportLraPanel — pemilih "Tahun Anggaran LRA" (Baca otomatis dari PDF / TA list), badge "TA 2026 (terdeteksi)" dengan tooltip sumber, body confirm menyertakan year, toast menyebut TA, riwayat +kolom Tahun & Periode; SyncLraButton — baris "Tahun anggaran: TA 2026 (terbaca dari dokumen LRA)" + deskripsi baru; LraSyncBadge + "— TA <tahun>"; realisasi-akun-section label "Tahun anggaran TA 2026 — realisasi kumulatif s.d. Juli"; admin-realisasi & admin-overview tabel +kolom TA badge
+- Verifikasi end-to-end: curl login admin → import kecamatan PDF (auto: year=2026 yearSource=deteksi, periode=7, 109 item) → confirm (saved=109, year=2026) → DB: opd:3 year=2026 periode=7; skpd/periode ikut tahun 2026; sync preview year=2026 3 OPD; POST sync body kosong → year 2026; override manual year=2024 → yearSource=manual; seluruh artefak uji dibersihkan & budget_item+apbd_summary dipulihkan persis dari snapshot (16 item, 2 OPD)
+- agent-browser: halaman render, login admin, Import LRA (pemilih tahun muncul, upload → "TA 2026 (terdeteksi)", riwayat kolom Tahun/Periode), dialog Sinkron ("TA 2026 (terbaca dari dokumen LRA)", Target: TA 2026), Realisasi Per-Akun ("Tahun anggaran TA 2026"), Pendapatan badge TA 2026, Data Realisasi kolom Tahun, Ringkasan Admin badge TA; 0 error konsol; lint bersih
+
+Stage Summary:
+- Import LRA kini MEMBACA TAHUN ANGGARAN dari dokumen ("TAHUN ANGGARAN 2026" dst.) dan menyimpannya per baris; data TA berbeda terpisah sebagai pembanding (tidak tercampur)
+- Sinkronisasi APBD/anggaran memakai tahun LRA (bukan tahun kalender); dashboard publik mengikuti tahun anggaran terbaru
+- Migrasi: data global lama dilabeli TA 2025, OPD (Dinkes/BKAD) TA 2026; unique key realisasi menjadi [code,scope,periode,year]
+- State akhir DB = state pengguna dipulihkan persis (2 OPD TA 2026 periode 7 + global TA 2025; 16 item anggaran 2026; apbd_summary 2025+2026); backup pra-migrasi di /tmp/backup-pre-year.db

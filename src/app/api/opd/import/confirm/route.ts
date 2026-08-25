@@ -5,7 +5,8 @@ import { confirmLra, scopeFor } from '@/lib/import-lra'
 
 /**
  * Konfirmasi hasil import LRA untuk OPD yang sedang login.
- * Scope dipaksa mengikuti OPD — body cukup { importLogId, items, mode }.
+ * Scope dipaksa mengikuti OPD — body cukup
+ * { importLogId, items, mode, periode?, year? }.
  */
 export async function POST(req: Request) {
   try {
@@ -19,7 +20,7 @@ export async function POST(req: Request) {
     }
 
     const body = (await req.json().catch(() => null)) as
-      | { importLogId?: unknown; items?: unknown; mode?: unknown; periode?: unknown }
+      | { importLogId?: unknown; items?: unknown; mode?: unknown; periode?: unknown; year?: unknown }
       | null
 
     const importLogId = Number(body?.importLogId)
@@ -48,6 +49,14 @@ export async function POST(req: Request) {
         ? periodeNum
         : (log.periode ?? 12)
 
+    // Tahun anggaran: dari body (hasil deteksi/override pada panel import),
+    // fallback tahun pada log import hasil pembacaan PDF
+    const yearNum = Number(body?.year)
+    const year =
+      Number.isInteger(yearNum) && yearNum >= 2000 && yearNum <= 2100
+        ? yearNum
+        : (log.year ?? new Date().getFullYear())
+
     const scope = scopeFor(opd.id)
     const { saved } = await confirmLra({
       items: body?.items,
@@ -56,9 +65,10 @@ export async function POST(req: Request) {
       opdId: opd.id,
       importLogId,
       periode,
+      year,
     })
 
-    return NextResponse.json({ data: { saved } })
+    return NextResponse.json({ data: { saved, periode, year } })
   } catch (error) {
     console.error('POST /api/opd/import/confirm error', error)
     return NextResponse.json({ error: 'Gagal menyimpan hasil import' }, { status: 500 })

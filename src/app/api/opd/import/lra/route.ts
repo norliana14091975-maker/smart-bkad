@@ -7,13 +7,20 @@ import {
   extractLraItems,
   extractPdfText,
 } from '@/lib/import-lra'
-import { detectPeriode, periodeLabel } from '@/lib/periode'
+import { detectPeriode, detectTahun, periodeLabel } from '@/lib/periode'
 
 export const runtime = 'nodejs'
+
+/** Validasi tahun anggaran masuk akal (2000..2100). */
+function validYear(n: number): boolean {
+  return Number.isInteger(n) && n >= 2000 && n <= 2100
+}
 
 /**
  * Unggah & urai PDF LRA untuk OPD yang sedang login — scope otomatis
  * mengikuti OPD tersebut (tidak bisa mengimpor untuk OPD lain).
+ * Tahun anggaran dibaca otomatis dari teks LRA ("TAHUN ANGGARAN 2026"
+ * dst.); OPD dapat menetapkannya manual lewat form field `year`.
  */
 export async function POST(req: Request) {
   try {
@@ -40,10 +47,26 @@ export async function POST(req: Request) {
 
     // Periode LRA: dari input OPD atau deteksi otomatis dari teks PDF
     let periode = 12
+    let periodeManual = false
     const periodeRaw = form?.get('periode')
     if (typeof periodeRaw === 'string' && periodeRaw) {
       const n = Number(periodeRaw)
-      if (Number.isInteger(n) && n >= 1 && n <= 12) periode = n
+      if (Number.isInteger(n) && n >= 1 && n <= 12) {
+        periode = n
+        periodeManual = true
+      }
+    }
+
+    // Tahun anggaran: dari input OPD atau dibaca otomatis dari teks LRA
+    let year = new Date().getFullYear()
+    let yearManual = false
+    const yearRaw = form?.get('year')
+    if (typeof yearRaw === 'string' && yearRaw) {
+      const n = Number(yearRaw)
+      if (validYear(n)) {
+        year = n
+        yearManual = true
+      }
     }
 
     const buffer = Buffer.from(await file.arrayBuffer())
@@ -73,10 +96,14 @@ export async function POST(req: Request) {
     }
 
     // Deteksi otomatis bila OPD tidak menetapkan periode
-    if (typeof periodeRaw !== 'string' || !periodeRaw) {
+    if (!periodeManual) {
       const detected = detectPeriode(text)
       if (detected) periode = detected
     }
+
+    // Baca tahun anggaran dari teks LRA bila OPD tidak menetapkannya
+    const yearDetected = !yearManual ? detectTahun(text) : null
+    if (yearDetected) year = yearDetected
 
     // Ekstraksi & klasifikasi kode rekening per level sesuai aturan BAS
     // Permendagri secara deterministik (parser baris, tanpa AI)
@@ -90,6 +117,7 @@ export async function POST(req: Request) {
         status: 'parsed',
         opdId: opd.id,
         periode,
+        year,
         message: items.length === 0 ? 'Tidak ada baris LRA terdeteksi dari PDF' : null,
       },
     })
@@ -103,6 +131,8 @@ export async function POST(req: Request) {
         opdName: opd.name,
         periode,
         periodeLabel: periodeLabel(periode),
+        year,
+        yearSource: yearManual ? 'manual' : yearDetected ? 'deteksi' : 'default',
         items,
         stats,
         textPreview: text.slice(0, 500),

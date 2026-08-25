@@ -21,6 +21,8 @@ export async function GET() {
       status: log.status,
       message: log.message,
       opdName: log.opd?.name ?? null,
+      year: log.year,
+      periode: log.periode,
       createdAt: log.createdAt.toISOString(),
     }))
     return NextResponse.json({ data })

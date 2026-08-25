@@ -20,7 +20,9 @@ interface AggRow {
  *                     periode TERAKHIR yang tersedia per OPD (konsolidasi)
  * - ?compare=1      : sertakan ringkasan pembanding antar periode tersedia
  *                     (bulanan/triwulan/semester) untuk perbandingan Kepala Daerah
- * meta menjelaskan mode agregasi + daftar OPD + periode aktif.
+ * Data mengikuti TAHUN ANGGARAN TERBARU hasil import LRA (tahun anggaran
+ * dibaca dari dokumen); import tahun lama tersimpan sebagai pembanding.
+ * meta menjelaskan mode agregasi + daftar OPD + tahun & periode aktif.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -54,6 +56,13 @@ export async function GET(request: NextRequest) {
         dbRows = all.filter((r) => r.scope === 'global')
       }
     }
+
+    // --- Penentuan tahun anggaran aktif ---
+    // Gunakan tahun anggaran TERBARU yang tersedia (data tahun lama tidak
+    // tercampur); bila OPD tak punya data tahun tsb, fallback tahun terbesar
+    // yang dimilikinya ditangani filter periode di bawah.
+    const activeYear = dbRows.length > 0 ? Math.max(...dbRows.map((r) => r.year)) : null
+    dbRows = activeYear !== null ? dbRows.filter((r) => r.year === activeYear) : []
 
     // --- Penentuan periode aktif ---
     // 'all' → per OPD ambil periode terbesarnya (LRA terbaru yang diimpor);
@@ -167,8 +176,8 @@ export async function GET(request: NextRequest) {
     if (withCompare) {
       const comparePeriodes = [3, 6, 9, 12]
       compare = comparePeriodes.map((p) => {
-        // Kartu pembanding = total kumulatif seluruh data pada periode p
-        // (tiap OPD menyumbang datanya sendiri pada periode tersebut)
+        // Kartu pembanding = total kumulatif seluruh data pada tahun aktif
+        // dan periode p (tiap OPD menyumbang datanya sendiri pada periode tsb)
         const subset = dbRows.filter((r) => r.periode === p)
         const aggC = new Map<string, { code: string; level: number; anggaran: number; realisasi: number }>()
         for (const r of subset) {
@@ -205,6 +214,7 @@ export async function GET(request: NextRequest) {
         mode,
         opdCount: opdIds.size,
         opdNames,
+        year: activeYear,
         periode: periodeAktif,
         periodeLabel: periodeAktif ? periodeLabel(periodeAktif) : null,
       },

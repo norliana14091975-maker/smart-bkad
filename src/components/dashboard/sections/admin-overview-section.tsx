@@ -21,6 +21,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { formatRupiah0 } from '@/lib/format'
+import { periodeLabel } from '@/lib/periode'
 import type { AdminOverviewDto, ImportLogDto } from '@/types/budget'
 
 async function fetchOverview(): Promise<AdminOverviewDto> {
@@ -96,6 +97,7 @@ export function AdminOverviewSection() {
             <TableHeader>
               <TableRow>
                 <TableHead>File</TableHead>
+                <TableHead>Tahun</TableHead>
                 <TableHead className="text-right">Halaman</TableHead>
                 <TableHead className="text-right">Baris</TableHead>
                 <TableHead>Status</TableHead>
@@ -106,7 +108,7 @@ export function AdminOverviewSection() {
               {isLoading ? (
                 [1, 2, 3].map((i) => (
                   <TableRow key={i}>
-                    <TableCell colSpan={5}>
+                    <TableCell colSpan={6}>
                       <Skeleton className="h-5 w-full" />
                     </TableCell>
                   </TableRow>
@@ -115,7 +117,7 @@ export function AdminOverviewSection() {
                 data.recentImports.map((log) => <ImportRow key={log.id} log={log} />)
               ) : (
                 <TableRow>
-                  <TableCell colSpan={5} className="py-6 text-center text-muted-foreground">
+                  <TableCell colSpan={6} className="py-6 text-center text-muted-foreground">
                     Belum ada riwayat import. Gunakan menu “Import LRA (PDF)”.
                   </TableCell>
                 </TableRow>
@@ -141,6 +143,11 @@ function ImportRow({ log }: { log: ImportLogDto }) {
     <TableRow>
       <TableCell className="max-w-[220px] truncate font-medium" title={log.filename}>
         {log.filename}
+      </TableCell>
+      <TableCell>
+        <Badge variant="secondary" className="bg-teal-100 text-teal-800" title={periodeLabel(log.periode)}>
+          TA {log.year}
+        </Badge>
       </TableCell>
       <TableCell className="text-right tabular-nums">{log.pages}</TableCell>
       <TableCell className="text-right tabular-nums">{log.records}</TableCell>

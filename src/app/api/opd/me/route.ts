@@ -5,7 +5,7 @@ import type { OpdSelfDto } from '@/types/budget'
 
 /**
  * Data milik OPD yang sedang login: profil + realisasi SKPD-nya
- * (dicocokkan berdasarkan nama OPD).
+ * (dicocokkan berdasarkan nama OPD, mengikuti tahun anggaran terbaru).
  */
 export async function GET() {
   try {
@@ -18,11 +18,17 @@ export async function GET() {
     })
     if (!opd) return unauthorized()
 
-    const realisasiRow = await db.realisasiSkpd.findUnique({ where: { name: opd.name } })
-
-    // Ringkasan per periode milik OPD (kumulatif s.d. bulan ke-N)
-    const periodeRows = await db.realisasiSkpdPeriode.findMany({
+    // Ringkasan utama: tahun anggaran TERBARU milik OPD ini
+    const realisasiRow = await db.realisasiSkpd.findFirst({
       where: { name: opd.name },
+      orderBy: { year: 'desc' },
+    })
+
+    // Ringkasan per periode milik OPD pada tahun anggaran terbaru
+    // (kumulatif s.d. bulan ke-N)
+    const latestYear = realisasiRow?.year
+    const periodeRows = await db.realisasiSkpdPeriode.findMany({
+      where: latestYear ? { name: opd.name, year: latestYear } : { name: opd.name },
       orderBy: { periode: 'asc' },
     })
 
@@ -44,6 +50,7 @@ export async function GET() {
         : null,
       realisasiPeriode: periodeRows.map((p) => ({
         periode: p.periode,
+        year: p.year,
         pendapatan: { anggaran: p.pendapatanAnggaran, realisasi: p.pendapatanRealisasi },
         belanja: { anggaran: p.belanjaAnggaran, realisasi: p.belanjaRealisasi },
         pembiayaan: { anggaran: p.pembiayaanAnggaran, realisasi: p.pembiayaanRealisasi },
