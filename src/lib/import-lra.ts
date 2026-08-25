@@ -120,8 +120,66 @@ function normalizeItem(entry: unknown): LraItem | null {
 // Ekstraksi teks PDF
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Polyfill DOM API untuk pdfjs di server Node (Turbopack tidak menjalankan
+// blok polyfill asli pdf.mjs secara andal saat bundling).
+// ---------------------------------------------------------------------------
+
+let polyfillsApplied = false
+
+/**
+ * Pasang polyfill DOMMatrix/ImageData/Path2D/navigator dari @napi-rs/canvas
+ * ke globalThis SEBELUM modul worker pdfjs diimpor. Tanpa ini, evaluasi
+ * modul worker di runtime Next.js+Turbopack melempar
+ * `ReferenceError: DOMMatrix is not defined` karena Turbopack membundel
+ * kode yang merujuk `DOMMatrix` sebagai identifier polos.
+ */
+async function ensurePdfjsPolyfills(): Promise<void> {
+  if (polyfillsApplied) return
+  const g = globalThis as {
+    DOMMatrix?: unknown
+    ImageData?: unknown
+    Path2D?: unknown
+    navigator?: { language?: string }
+  }
+  if (!g.DOMMatrix || !g.ImageData || !g.Path2D || !g.navigator?.language) {
+    try {
+      const canvas = await import('@napi-rs/canvas')
+      if (!g.DOMMatrix && canvas.DOMMatrix) g.DOMMatrix = canvas.DOMMatrix
+      if (!g.ImageData && canvas.ImageData) g.ImageData = canvas.ImageData
+      if (!g.Path2D && canvas.Path2D) g.Path2D = canvas.Path2D
+      if (!g.navigator?.language) {
+        g.navigator = { language: 'en-US', platform: '', userAgent: '' }
+      }
+    } catch {
+      // @napi-rs/canvas tidak tersedia — polyfill minimal agar identifier
+      // `DOMMatrix` setidaknya terdefinisi (operasi render akan no-op).
+      if (!g.DOMMatrix) {
+        class DOMMatrixStub {
+          a = 1
+          b = 0
+          c = 0
+          d = 1
+          e = 0
+          f = 0
+          scaleSelf() { return this }
+          translateSelf() { return this }
+          invertSelf() { return this }
+          multiplySelf() { return this }
+          preMultiplySelf() { return this }
+        }
+        g.DOMMatrix = DOMMatrixStub
+      }
+    }
+  }
+  polyfillsApplied = true
+}
+
 /** Baca teks PDF memakai pdf-parse (worker pdfjs diinjek via globalThis). */
 export async function extractPdfText(buffer: Buffer): Promise<{ text: string; pages: number }> {
+  // WAJIB sebelum import worker: pasang polyfill DOMMatrix dll.
+  await ensurePdfjsPolyfills()
+
   const { PDFParse } = await import('pdf-parse')
 
   // Di Next.js + Turbopack, pdfjs menjalankan `await import(this.workerSrc)`
