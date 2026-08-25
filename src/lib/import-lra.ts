@@ -1,5 +1,6 @@
 import fs from 'fs'
 import path from 'path'
+import { pathToFileURL } from 'node:url'
 import { db } from '@/lib/db'
 import { applyHierarchy, normalizeKode, standardNameFor } from '@/lib/kode-akun'
 import { detectPeriode } from '@/lib/periode'
@@ -119,18 +120,40 @@ function normalizeItem(entry: unknown): LraItem | null {
 // Ekstraksi teks PDF
 // ---------------------------------------------------------------------------
 
-/** Baca teks PDF memakai pdf-parse (worker diarahkan ke path absolut). */
+/** Baca teks PDF memakai pdf-parse (worker pdfjs diinjek via globalThis). */
 export async function extractPdfText(buffer: Buffer): Promise<{ text: string; pages: number }> {
   const { PDFParse } = await import('pdf-parse')
-  // Arahkan worker pdfjs ke path absolut (di bundler Turbopack resolusi
-  // relatif "pdf.worker.mjs" gagal karena diarahkan ke folder .next).
-  const workerPath = path.join(
-    process.cwd(),
-    'node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs'
-  )
-  if (fs.existsSync(workerPath)) {
-    PDFParse.setWorker(workerPath)
+
+  // Di Next.js + Turbopack, pdfjs menjalankan `await import(this.workerSrc)`
+  // untuk "fake worker" (fallback Node). Karena `workerSrc` adalah variabel
+  // runtime, Turbopack tidak bisa meresolvnya secara statis dan import gagal
+  // dengan "Setting up fake worker failed: ... Received protocol 'd:'".
+  // Solusi: preload modul worker melalui specifier literal (Turbopack bisa
+  // meresolvnnya saat build) dan taruh di globalThis.pdfjsWorker — pdfjs
+  // memeriksa global tersebut lebih dulu (lihat `#mainThreadWorkerMessageHandler`
+  // di pdf.mjs) sehingga import() dinamis diskip.
+  // Lihat: node_modules/pdfjs-dist/legacy/build/pdf.mjs baris ~21356-21366.
+  if (!(globalThis as { pdfjsWorker?: unknown }).pdfjsWorker) {
+    try {
+      // Specifier literal → dibundel statis oleh Turbopack, tidak memicu
+      // import() dinamis saat runtime.
+      const workerMod = await import(
+        'pdfjs-dist/legacy/build/pdf.worker.mjs'
+      )
+      ;(globalThis as { pdfjsWorker?: unknown }).pdfjsWorker = workerMod
+    } catch {
+      // Fallback: arahkan workerSrc ke URL file:// absolut (valid untuk
+      // import() ESM bila Turbopack akhirnya meresolvnnya secara dinamis).
+      const workerPath = path.join(
+        process.cwd(),
+        'node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs'
+      )
+      if (fs.existsSync(workerPath)) {
+        PDFParse.setWorker(pathToFileURL(workerPath).href)
+      }
+    }
   }
+
   const parser = new PDFParse({ data: new Uint8Array(buffer) })
   try {
     const result = await parser.getText()
