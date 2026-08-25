@@ -13,10 +13,14 @@ export const SESSION_MAX_AGE = 7 * 24 * 60 * 60
 export interface AdminUserPayload {
   id: string
   username: string
-  role: 'admin' | 'opd'
+  role: 'admin' | 'opd' | 'kepala_daerah'
   opdId: number | null
   opdName: string | null
 }
+
+/** Peran yang boleh mengakses fitur Analisis & AI (Ringkasan Eksekutif,
+ * Analisis Risiko, AI Copilot): admin penuh dan Kepala Daerah. */
+export const EXECUTIVE_ROLES: AdminUserPayload['role'][] = ['admin', 'kepala_daerah']
 
 /**
  * Verifikasi password terhadap hash scrypt dengan format "salt:hash" (hex, keylen 64).
@@ -59,7 +63,12 @@ export async function getAdminUser(): Promise<AdminUserPayload | null> {
     return {
       id: session.user.id,
       username: session.user.username,
-      role: session.user.role === 'opd' ? 'opd' : 'admin',
+      role:
+        session.user.role === 'opd'
+          ? 'opd'
+          : session.user.role === 'kepala_daerah'
+            ? 'kepala_daerah'
+            : 'admin',
       opdId: session.user.opd?.id ?? null,
       opdName: session.user.opd?.name ?? null,
     }
@@ -76,6 +85,17 @@ export async function getAdminUser(): Promise<AdminUserPayload | null> {
 export async function requireAdmin(): Promise<AdminUserPayload | null> {
   const user = await getAdminUser()
   if (!user || user.role !== 'admin') return null
+  return user
+}
+
+/**
+ * Guard fitur Analisis & AI (Ringkasan Eksekutif, Analisis Risiko, AI
+ * Copilot): hanya admin penuh dan Kepala Daerah yang diizinkan.
+ * Akun OPD dan pengunjung anonim ditolak.
+ */
+export async function requireExecutive(): Promise<AdminUserPayload | null> {
+  const user = await getAdminUser()
+  if (!user || !EXECUTIVE_ROLES.includes(user.role)) return null
   return user
 }
 

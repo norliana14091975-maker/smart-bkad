@@ -5,19 +5,27 @@ import { Button } from '@/components/ui/button'
 import type { AuthUserDto } from '@/types/budget'
 
 /**
- * Pembungkus section admin: jika belum login, tampilkan kartu peringatan
- * dengan tombol login (pertahanan ekstra — menu admin hanya muncul setelah login).
+ * Pembungkus section terbatas: jika user belum login dengan peran yang
+ * diizinkan, tampilkan kartu peringatan dengan tombol login (pertahanan
+ * ekstra — menu hanya muncul setelah login).
+ *
+ * `roles` default ['admin'] (section kelola admin). Section Analisis & AI
+ * memakai roles=['admin','kepala_daerah'].
  */
 export function AdminGuard({
   user,
   onLoginClick,
+  roles,
   children,
 }: {
   user: AuthUserDto | null
   onLoginClick: () => void
+  /** Peran yang diizinkan mengakses section; default hanya admin */
+  roles?: AuthUserDto['role'][]
   children: React.ReactNode
 }) {
-  if (user?.role === 'admin') return <>{children}</>
+  const allowed = roles ?? ['admin']
+  if (user && allowed.includes(user.role)) return <>{children}</>
 
   return (
     <div className="flex min-h-[40vh] items-center justify-center">
@@ -27,10 +35,12 @@ export function AdminGuard({
         </div>
         <h2 className="text-base font-bold text-foreground">Akses Terbatas</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Silakan login sebagai admin untuk mengelola data sistem.
+          {allowed.length > 1
+            ? 'Silakan login sebagai admin atau Kepala Daerah untuk mengakses fitur ini.'
+            : 'Silakan login sebagai admin untuk mengelola data sistem.'}
         </p>
         <Button onClick={onLoginClick} className="mt-4 bg-[#17408b] text-white hover:bg-[#12326e]">
-          <Lock className="h-4 w-4" aria-hidden="true" /> Login Admin
+          <Lock className="h-4 w-4" aria-hidden="true" /> Login
         </Button>
       </div>
     </div>

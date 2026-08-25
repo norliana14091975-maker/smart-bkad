@@ -20,6 +20,9 @@ import { AdminImportSection } from '@/components/dashboard/sections/admin-import
 import { AdminTransparansiSection } from '@/components/dashboard/sections/admin-transparansi-section'
 import { AdminSettingsSection } from '@/components/dashboard/sections/admin-settings-section'
 import { AdminOpdSection } from '@/components/dashboard/sections/admin-opd-section'
+import { ExecutiveSummarySection } from '@/components/dashboard/sections/executive-summary-section'
+import { RiskAnalysisSection } from '@/components/dashboard/sections/risk-analysis-section'
+import { CopilotWidget } from '@/components/dashboard/copilot-widget'
 import { OpdDashboardSection } from '@/components/dashboard/sections/opd-dashboard-section'
 import { OpdImportSection } from '@/components/dashboard/sections/opd-import-section'
 import { LoginDialog } from '@/components/dashboard/admin/login-dialog'
@@ -40,6 +43,8 @@ const SECTION_META: Record<
   'realisasi-skpd': { title: 'Realisasi Anggaran Per-SKPD', breadcrumbHome: 'Dashboard', breadcrumbCurrent: 'SKPD' },
   'transparansi-apbd': { title: 'Transparansi', breadcrumbHome: 'Transparansi', breadcrumbCurrent: 'APBD' },
   'transparansi-realisasi': { title: 'Transparansi', breadcrumbHome: 'Transparansi', breadcrumbCurrent: 'Realisasi' },
+  'ringkasan-eksekutif': { title: 'Ringkasan Eksekutif', breadcrumbHome: 'Analisis', breadcrumbCurrent: 'Ringkasan Eksekutif' },
+  'analisis-risiko': { title: 'Analisis Risiko', breadcrumbHome: 'Analisis', breadcrumbCurrent: 'Analisis Risiko' },
   'admin-overview': { title: 'Ringkasan Admin', breadcrumbHome: 'Admin', breadcrumbCurrent: 'Ringkasan' },
   'admin-apbd': { title: 'Kelola Data APBD', breadcrumbHome: 'Admin', breadcrumbCurrent: 'Data APBD' },
   'admin-budget': { title: 'Kelola Item Anggaran', breadcrumbHome: 'Admin', breadcrumbCurrent: 'Item Anggaran' },
@@ -62,6 +67,12 @@ const ADMIN_SECTIONS: SectionId[] = [
   'admin-settings',
   'admin-opd',
 ]
+
+/** Section Analisis & AI — hanya admin penuh & Kepala Daerah. */
+const EXECUTIVE_SECTIONS: SectionId[] = ['ringkasan-eksekutif', 'analisis-risiko']
+
+/** Peran yang boleh melihat fitur Analisis & AI + AI Copilot. */
+const EXECUTIVE_ROLE: AuthUserDto['role'][] = ['admin', 'kepala_daerah']
 
 const OPD_SECTIONS: SectionId[] = ['opd-dashboard', 'opd-import']
 
@@ -127,7 +138,14 @@ export default function Home() {
   const handleLoginSuccess = (u: AuthUserDto) => {
     setUser(u)
     setLoginOpen(false)
-    handleSelect(u.role === 'admin' ? 'admin-overview' : 'opd-dashboard')
+    // Kepala Daerah langsung ke Ringkasan Eksekutif; admin ke ringkasan admin
+    handleSelect(
+      u.role === 'admin'
+        ? 'admin-overview'
+        : u.role === 'kepala_daerah'
+          ? 'ringkasan-eksekutif'
+          : 'opd-dashboard'
+    )
   }
 
   const handleLogout = async () => {
@@ -142,6 +160,10 @@ export default function Home() {
 
   const isAdminSection = user?.role === 'admin' && ADMIN_SECTIONS.includes(section)
   const isOpdSection = user?.role === 'opd' && OPD_SECTIONS.includes(section)
+  // Section Analisis & AI (admin / Kepala Daerah)
+  const isExecutiveSection =
+    user != null && EXECUTIVE_ROLE.includes(user.role) && EXECUTIVE_SECTIONS.includes(section)
+  const copilotVisible = user != null && EXECUTIVE_ROLE.includes(user.role)
 
   return (
     <div className="flex min-h-screen flex-col bg-[#f4f6f8]">
@@ -198,6 +220,13 @@ export default function Home() {
             {section === 'transparansi-apbd' && <TransparansiSection initialType="APBD" />}
             {section === 'transparansi-realisasi' && <TransparansiSection initialType="Realisasi" />}
 
+            {isExecutiveSection && (
+              <AdminGuard user={user} onLoginClick={() => setLoginOpen(true)} roles={['admin', 'kepala_daerah']}>
+                {section === 'ringkasan-eksekutif' && <ExecutiveSummarySection />}
+                {section === 'analisis-risiko' && <RiskAnalysisSection />}
+              </AdminGuard>
+            )}
+
             {isAdminSection && (
               <AdminGuard user={user} onLoginClick={() => setLoginOpen(true)}>
                 {section === 'admin-overview' && <AdminOverviewSection />}
@@ -220,6 +249,9 @@ export default function Home() {
       </div>
 
       <LoginDialog open={loginOpen} onOpenChange={setLoginOpen} onSuccess={handleLoginSuccess} />
+
+      {/* AI Copilot — hanya admin & Kepala Daerah */}
+      {copilotVisible && <CopilotWidget />}
     </div>
   )
 }

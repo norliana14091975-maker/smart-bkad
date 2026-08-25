@@ -339,7 +339,19 @@ async function main() {
     create: { username: 'admin', passwordHash: hashPassword('admin123') },
   })
 
-  console.log('Seed selesai. Login admin: admin / admin123')
+  // akun Kepala Daerah default (username: kepala_daerah, password: kepala123)
+  // — akses fitur Analisis & AI (Ringkasan Eksekutif, Analisis Risiko, AI Copilot)
+  await db.adminUser.upsert({
+    where: { username: 'kepala_daerah' },
+    update: {},
+    create: {
+      username: 'kepala_daerah',
+      passwordHash: hashPassword('kepala123'),
+      role: 'kepala_daerah',
+    },
+  })
+
+  console.log('Seed selesai. Login admin: admin / admin123, Kepala Daerah: kepala_daerah / kepala123')
 }
 
 main()

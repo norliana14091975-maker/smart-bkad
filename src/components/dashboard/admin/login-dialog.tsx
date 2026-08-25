@@ -108,7 +108,9 @@ export function LoginDialog({ open, onOpenChange, onSuccess }: LoginDialogProps)
 
           <p className="text-center text-xs text-muted-foreground">
             Akun default: <span className="font-semibold">admin</span> /{' '}
-            <span className="font-semibold">admin123</span>
+            <span className="font-semibold">admin123</span> ·{' '}
+            <span className="font-semibold">kepala_daerah</span> /{' '}
+            <span className="font-semibold">kepala123</span>
           </p>
         </form>
       </DialogContent>

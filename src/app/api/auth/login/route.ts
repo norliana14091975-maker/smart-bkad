@@ -45,7 +45,12 @@ export async function POST(req: Request) {
     const res = NextResponse.json({
       data: {
         username: user.username,
-        role: user.role === 'opd' ? ('opd' as const) : ('admin' as const),
+        role:
+          user.role === 'opd'
+            ? ('opd' as const)
+            : user.role === 'kepala_daerah'
+              ? ('kepala_daerah' as const)
+              : ('admin' as const),
         opdName: user.opd?.name ?? null,
       },
     })

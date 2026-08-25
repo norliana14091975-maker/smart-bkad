@@ -5,6 +5,7 @@ import {
   BarChart3,
   Building2,
   ChevronDown,
+  Crown,
   Eye,
   LayoutDashboard,
   LogIn,
@@ -12,6 +13,7 @@ import {
   Minus,
   Settings2,
   ShieldCheck,
+  Sparkles,
   Table2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -27,6 +29,8 @@ export type SectionId =
   | 'realisasi-skpd'
   | 'transparansi-apbd'
   | 'transparansi-realisasi'
+  | 'ringkasan-eksekutif'
+  | 'analisis-risiko'
   | 'admin-overview'
   | 'admin-apbd'
   | 'admin-budget'
@@ -108,6 +112,17 @@ const OPD_NAV: NavGroup = {
   ],
 }
 
+/** Menu Analisis & AI — hanya untuk admin penuh & Kepala Daerah. */
+const EXEC_NAV: NavGroup = {
+  id: 'analisis',
+  label: 'Analisis & AI',
+  icon: Sparkles,
+  children: [
+    { id: 'ringkasan-eksekutif', label: 'Ringkasan Eksekutif' },
+    { id: 'analisis-risiko', label: 'Analisis Risiko' },
+  ],
+}
+
 interface SidebarNavProps {
   active: SectionId
   onSelect: (id: SectionId) => void
@@ -127,10 +142,11 @@ export function SidebarNav({ active, onSelect, className, user, onLoginClick, on
       anggaran: true,
       realisasi: false,
       transparansi: false,
+      analisis: false,
       admin: false,
       opd: true,
     }
-    const all = [NAV, ADMIN_NAV, OPD_NAV].flat()
+    const all = [NAV, ADMIN_NAV, OPD_NAV, EXEC_NAV].flat()
     for (const g of all) {
       if (g.children.some((c) => c.id === active)) initial[g.id] = true
     }
@@ -224,6 +240,21 @@ export function SidebarNav({ active, onSelect, className, user, onLoginClick, on
           </li>
 
           {NAV.map(renderGroup)}
+
+          {/* Analisis & AI — admin penuh & Kepala Daerah */}
+          {(user?.role === 'admin' || user?.role === 'kepala_daerah') && (
+            <>
+              {user.role === 'kepala_daerah' && (
+                <li className="pt-3">
+                  <p className="flex items-center gap-2 px-3 pb-1 text-[10px] font-bold uppercase tracking-[0.2em] text-amber-300/90">
+                    <Crown className="h-3 w-3" aria-hidden="true" />
+                    Area Kepala Daerah — {user.username}
+                  </p>
+                </li>
+              )}
+              {renderGroup(EXEC_NAV)}
+            </>
+          )}
 
           {user?.role === 'admin' && (
             <>

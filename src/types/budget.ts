@@ -182,7 +182,7 @@ export interface AppSettingsDto {
 // User yang sedang login (admin penuh atau akun OPD)
 export interface AuthUserDto {
   username: string
-  role: 'admin' | 'opd'
+  role: 'admin' | 'opd' | 'kepala_daerah'
   opdName?: string | null
 }
 
