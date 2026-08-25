@@ -13,6 +13,7 @@ export async function POST() {
     await db.appSetting.deleteMany({})
     removeUploadedImage('app-logo')
     removeUploadedImage('app-sidebar-logo')
+    removeUploadedImage('app-emblem')
     removeUploadedImage('app-favicon')
 
     return NextResponse.json({ data: DEFAULT_SETTINGS })

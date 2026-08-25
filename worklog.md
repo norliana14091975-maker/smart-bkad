@@ -323,3 +323,18 @@ Work Log:
 
 Stage Summary:
 - Logo pojok kiri atas (sidebar) kini punya pengaturan tersendiri di Pengaturan Aplikasi — independen dari Logo Aplikasi (header), dengan fallback otomatis ke logo utama bila dihapus/kosong; logo utama, favicon, dan seluruh kustomisasi user lain tidak terpengaruh
+
+---
+Task ID: 16
+Agent: Z.ai Code (main)
+Task: Pengaturan logo pojok kanan (lencana) + pengaturan warna header
+
+Work Log:
+- Types/default/lib settings: AppSettingsDto + emblemUrl (logo pojok kanan, null = emblem emas bawaan) + headerColor (hex #rrggbg, null = gradien biru bawaan; validasi regex di getSettings)
+- API baru /api/admin/settings/emblem (POST unggah — magic-byte validation, maks 2 MB, simpan public/uploads/app-emblem.<ext>; DELETE — hapus file + kunci); PUT /api/admin/settings menerima headerColor (hex valid atau string kosong = hapus kunci → kembali gradien bawaan; invalid ditolak 400); route reset ikut membersihkan app-emblem
+- UI header.tsx: pojok kanan memakai settings.emblemUrl (img) dengan fallback GoldEmblem SVG bawaan; latar header memakai style backgroundColor dari headerColor bila diatur (gradien bawaan tetap kelas CSS)
+- UI Pengaturan Aplikasi: kartu baru "Logo Pojok Kanan (Lencana)" (preview di atas gradien biru seperti header, status kustom/bawaan, Unggah/Hapus — hapus = kembali ke emblem emas bawaan) dan kartu "Warna Header" (8 preset warna pemerintahan: biru laut/biru cerah/teal/hijau/oranye/marun/ungu/abu gelap; color picker + input hex + tombol Terapkan; tombol "Kembalikan Gradien Bawaan" + indikator warna aktif); kind upload/remove diperluas 'emblem'
+- Verifikasi: curl — upload emblem PNG uji → emblemUrl terisi; PUT headerColor #0f766e tersimpan; warna "hijau" ditolak 400; browser — header teal (rgb(15,118,110)) + emblem kustom di pojok kanan; preset marun langsung mengubah header rgb(185,28,28); Kembalikan Gradien Bawaan menghapus kunci DB (header kembali gradien setelah refresh data); kartu pengaturan tampil lengkap; tanpa error console; lint bersih; data uji dibersihkan (emblem bawaan, warna gradien, logo GIF user & favicon tak tersentuh)
+
+Stage Summary:
+- Pojok kanan header kini punya pengaturan logo/lencana tersendiri (fallback emblem emas bawaan) dan warna header dapat diubah dari pengaturan (8 preset + warna kustom hex + kembali ke gradien biru bawaan) — semua kustomisasi user sebelumnya (logo utama, logo sidebar, favicon, teks) tidak terpengaruh

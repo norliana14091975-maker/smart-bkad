@@ -13,6 +13,8 @@ export const DEFAULT_SETTINGS: AppSettingsDto = {
   brandSubtext: 'Provinsi DKI Jakarta',
   logoUrl: null,
   sidebarLogoUrl: null,
+  emblemUrl: null,
+  headerColor: null,
   faviconUrl: null,
   footerText:
     'Dashboard Monitoring Pengelolaan Keuangan Daerah — Pemerintah Provinsi DKI Jakarta',

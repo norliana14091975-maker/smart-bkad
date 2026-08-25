@@ -20,7 +20,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
-import { DkiEmblem } from '@/components/dashboard/emblem'
+import { DkiEmblem, GoldEmblem } from '@/components/dashboard/emblem'
 import { DEFAULT_SETTINGS } from '@/lib/default-settings'
 import type { AppSettingsDto } from '@/types/budget'
 
@@ -31,6 +31,18 @@ type TextKey =
   | 'brandText'
   | 'brandSubtext'
   | 'footerText'
+
+/** Pilihan warna header populer untuk pemerintahan daerah */
+const PRESET_HEADER_COLORS = [
+  '#17408b', // biru laut (bawaan)
+  '#1d4ed8', // biru cerah
+  '#0f766e', // teal
+  '#15803d', // hijau
+  '#b45309', // oranye keemasan
+  '#b91c1c', // merah marun
+  '#581c87', // ungu tua
+  '#374151', // abu gelap
+]
 
 const TEXT_FIELDS: {
   key: TextKey
@@ -93,11 +105,39 @@ export function AdminSettingsSection() {
   const [draft, setDraft] = useState<Partial<Record<TextKey, string>>>({})
   const [saving, setSaving] = useState(false)
   const [resetOpen, setResetOpen] = useState(false)
-  const [uploading, setUploading] = useState<'logo' | 'sidebar-logo' | 'favicon' | null>(null)
+  const [uploading, setUploading] = useState<'logo' | 'sidebar-logo' | 'emblem' | 'favicon' | null>(null)
 
   const logoInputRef = useRef<HTMLInputElement>(null)
   const sidebarLogoInputRef = useRef<HTMLInputElement>(null)
+  const emblemInputRef = useRef<HTMLInputElement>(null)
   const faviconInputRef = useRef<HTMLInputElement>(null)
+
+  // Draf warna header (hex); null = belum diubah (ikut data server)
+  const [headerColorDraft, setHeaderColorDraft] = useState<string | null>(null)
+  const headerColorValue = headerColorDraft ?? (data?.headerColor ?? '')
+
+  // Simpan warna header lewat endpoint yang sama dengan teks
+  async function saveHeaderColor(value: string) {
+    const color = value.trim()
+    if (color !== '' && !/^#[0-9a-fA-F]{6}$/.test(color)) {
+      toast({ title: 'Warna tidak valid', description: 'Gunakan kode hex #rrggbb.', variant: 'destructive' })
+      return
+    }
+    try {
+      const res = await fetch('/api/admin/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ headerColor: color }),
+      })
+      const json = (await res.json()) as { data?: AppSettingsDto; error?: string }
+      if (!res.ok || !json.data) throw new Error(json.error ?? 'Gagal menyimpan warna')
+      setHeaderColorDraft(null)
+      toast({ title: color ? 'Warna header diperbarui' : 'Warna header kembali ke gradien bawaan' })
+      await queryClient.invalidateQueries({ queryKey: ['settings'] })
+    } catch (err) {
+      toast({ title: 'Gagal menyimpan warna', description: String(err), variant: 'destructive' })
+    }
+  }
 
   const value = (key: TextKey): string => {
     if (draft[key] !== undefined) return draft[key]
@@ -131,9 +171,15 @@ export function AdminSettingsSection() {
     }
   }
 
-  async function uploadImage(kind: 'logo' | 'sidebar-logo' | 'favicon', file: File) {
+  async function uploadImage(kind: 'logo' | 'sidebar-logo' | 'emblem' | 'favicon', file: File) {
     const ref =
-      kind === 'logo' ? logoInputRef : kind === 'sidebar-logo' ? sidebarLogoInputRef : faviconInputRef
+      kind === 'logo'
+        ? logoInputRef
+        : kind === 'sidebar-logo'
+          ? sidebarLogoInputRef
+          : kind === 'emblem'
+            ? emblemInputRef
+            : faviconInputRef
     if (ref) {
       // reset nilai input agar file bernama sama bisa diunggah ulang
       if (ref.current) ref.current.value = ''
@@ -152,7 +198,7 @@ export function AdminSettingsSection() {
       fd.append('file', file)
       const res = await fetch(`/api/admin/settings/${kind}`, { method: 'POST', body: fd })
       const json = (await res.json()) as {
-        data?: { logoUrl?: string; sidebarLogoUrl?: string; faviconUrl?: string }
+        data?: { logoUrl?: string; sidebarLogoUrl?: string; emblemUrl?: string; faviconUrl?: string }
         error?: string
       }
       if (!res.ok || !json.data) throw new Error(json.error ?? 'Gagal mengunggah')
@@ -162,7 +208,9 @@ export function AdminSettingsSection() {
             ? 'Logo diperbarui'
             : kind === 'sidebar-logo'
               ? 'Logo pojok kiri diperbarui'
-              : 'Favicon diperbarui',
+              : kind === 'emblem'
+                ? 'Lencana pojok kanan diperbarui'
+                : 'Favicon diperbarui',
       })
       await queryClient.invalidateQueries({ queryKey: ['settings'] })
     } catch (err) {
@@ -172,7 +220,7 @@ export function AdminSettingsSection() {
     }
   }
 
-  async function removeImage(kind: 'logo' | 'sidebar-logo' | 'favicon') {
+  async function removeImage(kind: 'logo' | 'sidebar-logo' | 'emblem' | 'favicon') {
     try {
       const res = await fetch(`/api/admin/settings/${kind}`, { method: 'DELETE' })
       if (!res.ok) throw new Error('Gagal menghapus')
@@ -182,7 +230,9 @@ export function AdminSettingsSection() {
             ? 'Logo kustom dihapus'
             : kind === 'sidebar-logo'
               ? 'Logo pojok kiri kembali mengikuti Logo Aplikasi'
-              : 'Favicon kustom dihapus',
+              : kind === 'emblem'
+                ? 'Lencana pojok kanan kembali ke emblem emas bawaan'
+                : 'Favicon kustom dihapus',
       })
       await queryClient.invalidateQueries({ queryKey: ['settings'] })
     } catch (err) {
@@ -404,6 +454,130 @@ export function AdminSettingsSection() {
               </div>
             </div>
           </div>
+        </section>
+
+        <section className="rounded-lg border bg-card p-4 shadow-sm sm:p-5">
+          <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-foreground/80">
+            Logo Pojok Kanan (Lencana)
+          </h3>
+          <p className="mb-4 text-xs text-muted-foreground">
+            Logo/lencana di pojok kanan pita header. Bila kosong, memakai emblem emas bawaan.
+            PNG/JPG/GIF/WebP/SVG/ICO, maks 2 MB.
+          </p>
+          <div className="flex items-center gap-4">
+            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-lg border bg-gradient-to-r from-[#17408b] to-[#1d4ed8] p-2">
+              {isLoading ? (
+                <Skeleton className="h-14 w-14" />
+              ) : data?.emblemUrl ? (
+                <img src={data.emblemUrl} alt="Lencana aplikasi" className="h-16 w-16 object-contain" />
+              ) : (
+                <GoldEmblem className="h-16 w-16" />
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold text-foreground">
+                {data?.emblemUrl ? 'Lencana kustom aktif' : 'Menggunakan emblem emas bawaan'}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <input
+                  ref={emblemInputRef}
+                  type="file"
+                  accept="image/*,.ico,.svg"
+                  className="sr-only"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) void uploadImage('emblem', file)
+                  }}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => emblemInputRef.current?.click()}
+                  disabled={uploading === 'emblem'}
+                >
+                  {uploading === 'emblem' ? (
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Upload className="h-4 w-4" aria-hidden="true" />
+                  )}
+                  Unggah Lencana
+                </Button>
+                {data?.emblemUrl && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => removeImage('emblem')}
+                    className="text-destructive hover:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4" aria-hidden="true" /> Hapus
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-lg border bg-card p-4 shadow-sm sm:p-5">
+          <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-foreground/80">
+            Warna Header
+          </h3>
+          <p className="mb-4 text-xs text-muted-foreground">
+            Warna latar pita header atas. Bila kosong, memakai gradien biru bawaan.
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            {(PRESET_HEADER_COLORS).map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => void saveHeaderColor(c)}
+                aria-label={`Pakai warna ${c}`}
+                title={c}
+                className={`h-8 w-8 rounded-full border-2 transition-transform hover:scale-110 ${
+                  headerColorValue.toLowerCase() === c ? 'border-foreground' : 'border-border'
+                }`}
+                style={{ backgroundColor: c }}
+              />
+            ))}
+            <div className="ml-1 flex items-center gap-2">
+              <input
+                type="color"
+                aria-label="Pilih warna kustom"
+                value={headerColorValue || '#17408b'}
+                onChange={(e) => setHeaderColorDraft(e.target.value)}
+                className="h-8 w-10 cursor-pointer rounded border border-input bg-background p-0.5"
+              />
+              <Input
+                value={headerColorValue}
+                onChange={(e) => setHeaderColorDraft(e.target.value)}
+                placeholder="#17408b"
+                className="h-8 w-28 font-mono text-xs"
+                aria-label="Kode hex warna header"
+              />
+              <Button
+                size="sm"
+                onClick={() => void saveHeaderColor(headerColorDraft ?? headerColorValue)}
+                disabled={headerColorDraft === null || headerColorDraft === (data?.headerColor ?? '')}
+                className="h-8 bg-[#17408b] text-white hover:bg-[#12326e]"
+              >
+                Terapkan
+              </Button>
+            </div>
+          </div>
+          {(data?.headerColor || headerColorDraft) && (
+            <div className="mt-3 flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void saveHeaderColor('')}
+                className="text-muted-foreground"
+              >
+                <RotateCcw className="h-4 w-4" aria-hidden="true" /> Kembalikan Gradien Bawaan
+              </Button>
+              <span className="text-[11px] text-muted-foreground">
+                Aktif: <span className="font-mono font-semibold">{headerColorValue}</span>
+              </span>
+            </div>
+          )}
         </section>
 
         <section className="rounded-lg border bg-card p-4 shadow-sm sm:p-5">

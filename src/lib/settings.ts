@@ -19,6 +19,8 @@ export async function getSettings(): Promise<AppSettingsDto> {
     brandSubtext: map.brandSubtext ?? DEFAULT_SETTINGS.brandSubtext,
     logoUrl: map.logoUrl || null,
     sidebarLogoUrl: map.sidebarLogoUrl || null,
+    emblemUrl: map.emblemUrl || null,
+    headerColor: /^#[0-9a-fA-F]{6}$/.test(map.headerColor ?? '') ? (map.headerColor as string) : null,
     faviconUrl: map.faviconUrl || null,
     footerText: map.footerText ?? DEFAULT_SETTINGS.footerText,
   }

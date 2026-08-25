@@ -13,6 +13,9 @@ const TEXT_FIELDS: Record<string, number> = {
   footerText: 200,
 }
 
+// Warna header harus hex #rrggbb valid (atau string kosong = bawaan)
+const HEADER_COLOR_RE = /^#[0-9a-fA-F]{6}$/
+
 /** Simpan pengaturan teks aplikasi (nama, judul, deskripsi, brand, footer). */
 export async function PUT(req: Request) {
   try {
@@ -42,6 +45,26 @@ export async function PUT(req: Request) {
         )
       }
       updates.push({ key, value })
+    }
+
+    // Warna header: hex valid atau kosong (kosong = kembali ke gradien bawaan)
+    if ('headerColor' in body) {
+      const raw = body.headerColor
+      if (typeof raw !== 'string') {
+        return NextResponse.json({ error: 'Warna header tidak valid' }, { status: 400 })
+      }
+      const value = raw.trim()
+      if (value !== '' && !HEADER_COLOR_RE.test(value)) {
+        return NextResponse.json(
+          { error: 'Warna header harus kode hex #rrggbb (contoh #17408b)' },
+          { status: 400 },
+        )
+      }
+      if (value === '') {
+        await db.appSetting.deleteMany({ where: { key: 'headerColor' } })
+      } else {
+        updates.push({ key: 'headerColor', value })
+      }
     }
 
     if (updates.length === 0) {

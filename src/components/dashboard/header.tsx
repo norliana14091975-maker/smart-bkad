@@ -10,9 +10,15 @@ import type { AppSettingsDto } from '@/types/budget'
  * dengan pola watermark ikon keuangan.
  */
 export function HeaderBand({ settings }: { settings: AppSettingsDto }) {
+  // Warna header: pengaturan admin (hex) atau gradien bawaan
+  const headerBg = settings.headerColor
+    ? { backgroundColor: settings.headerColor }
+    : undefined
+
   return (
     <div
       className="relative overflow-hidden bg-gradient-to-r from-[#17408b] via-[#1d4ed8] to-[#17408b]"
+      style={headerBg}
       role="banner"
     >
       {/* pola watermark ikon keuangan */}
@@ -44,7 +50,16 @@ export function HeaderBand({ settings }: { settings: AppSettingsDto }) {
         ) : (
           <BpkdLogo text={settings.brandText} subtext={settings.brandSubtext} />
         )}
-        <GoldEmblem className="hidden h-20 w-20 shrink-0 sm:block md:h-24 md:w-24" />
+        {/* Logo pojok kanan: pengaturan khusus lencana, fallback emblem emas bawaan */}
+        {settings.emblemUrl ? (
+          <img
+            src={settings.emblemUrl}
+            alt="Lencana aplikasi"
+            className="hidden h-20 w-20 shrink-0 object-contain sm:block md:h-24 md:w-24"
+          />
+        ) : (
+          <GoldEmblem className="hidden h-20 w-20 shrink-0 sm:block md:h-24 md:w-24" />
+        )}
       </div>
     </div>
   )

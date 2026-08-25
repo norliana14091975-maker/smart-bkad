@@ -152,6 +152,10 @@ export interface AppSettingsDto {
   logoUrl: string | null
   /** Logo khusus pojok kiri atas sidebar (null = mengikuti logoUrl) */
   sidebarLogoUrl: string | null
+  /** Logo khusus pojok kanan header/lencana (null = emblem emas bawaan) */
+  emblemUrl: string | null
+  /** Warna latar header (hex, mis. #17408b; null = gradien bawaan) */
+  headerColor: string | null
   faviconUrl: string | null
   footerText: string
 }
