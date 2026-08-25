@@ -37,6 +37,7 @@ import {
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { levelBadge } from '@/lib/kode-akun'
+import { AkunUraian } from '@/components/dashboard/akun-uraian'
 import { useLevelFilter } from '@/hooks/use-level-filter'
 import { LevelFilterControls } from '@/components/dashboard/level-filter-controls'
 import { formatPct, formatRupiah, formatRupiah0 } from '@/lib/format'
@@ -207,7 +208,11 @@ function AkunTable() {
                   <TableRow key={row.id}>
                     <TableCell className="font-mono text-xs">{row.code}</TableCell>
                     <TableCell className="font-medium">
-                      <div style={{ paddingLeft: `${(row.level - 1) * 12}px` }}>{row.name}</div>
+                      <AkunUraian
+                        name={row.name}
+                        level={row.level}
+                        className="max-w-[160px] sm:max-w-[210px] lg:max-w-[250px]"
+                      />
                     </TableCell>
                     <TableCell>
                       <Badge variant="secondary" className="whitespace-nowrap bg-muted font-mono text-[10px]">
@@ -219,7 +224,9 @@ function AkunTable() {
                     </TableCell>
                     <TableCell className="text-xs">
                       {row.opdName ? (
-                        <span className="font-semibold">{row.opdName}</span>
+                        <span className="block max-w-[120px] whitespace-normal break-words font-semibold sm:max-w-[140px]">
+                          {row.opdName}
+                        </span>
                       ) : (
                         <span className="text-muted-foreground">Konsolidasi</span>
                       )}
@@ -472,7 +479,12 @@ function SkpdTable() {
               ) : data && data.length > 0 ? (
                 data.map((row) => (
                   <TableRow key={row.id}>
-                    <TableCell className="font-medium">{row.name}</TableCell>
+                    <TableCell className="font-medium">
+                      <AkunUraian
+                        name={row.name}
+                        className="max-w-[180px] sm:max-w-[240px] lg:max-w-[320px]"
+                      />
+                    </TableCell>
                     <TableCell className="text-right tabular-nums">{formatRupiah0(row.pendapatan.anggaran)}</TableCell>
                     <TableCell className="text-right tabular-nums">{formatRupiah0(row.pendapatan.realisasi)}</TableCell>
                     <TableCell className="text-right tabular-nums">{formatRupiah0(row.belanja.anggaran)}</TableCell>

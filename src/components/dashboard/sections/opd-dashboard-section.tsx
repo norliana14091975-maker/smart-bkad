@@ -18,6 +18,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { levelBadge } from '@/lib/kode-akun'
+import { AkunUraian } from '@/components/dashboard/akun-uraian'
 import { useLevelFilter } from '@/hooks/use-level-filter'
 import { LevelFilterControls } from '@/components/dashboard/level-filter-controls'
 import { usePeriodeFilter, PeriodeFilterControls } from '@/components/dashboard/periode-filter-controls'
@@ -345,13 +346,7 @@ export function OpdDashboardSection() {
                             </Badge>
                           </TableCell>
                           <TableCell>
-                            <div
-                              className="flex items-baseline gap-2"
-                              style={{ paddingLeft: `${(item.level - 1) * 14}px` }}
-                            >
-                              <span className="font-mono text-xs font-semibold">{item.code}</span>
-                              <span className="text-sm">{item.name}</span>
-                            </div>
+                            <AkunUraian code={item.code} name={item.name} level={item.level} />
                           </TableCell>
                           <TableCell className="text-right tabular-nums">{formatRupiah(item.anggaran)}</TableCell>
                           <TableCell className="text-right tabular-nums">{formatRupiah(item.realisasi)}</TableCell>

@@ -72,7 +72,7 @@ export function TransparansiSection({ initialType = 'APBD' }: { initialType?: Do
             <TableHeader>
               <TableRow>
                 <TableHead className="w-16 text-center">#</TableHead>
-                <TableHead className="min-w-[280px]">Detail Transparansi</TableHead>
+                <TableHead className="min-w-[280px] max-w-[560px]">Detail Transparansi</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -107,7 +107,7 @@ export function TransparansiSection({ initialType = 'APBD' }: { initialType?: Do
                             aria-label={`Buka dokumen ${doc.title} pada tab baru`}
                           >
                             <FileText className="h-4 w-4 shrink-0 opacity-70" aria-hidden="true" />
-                            <span className="min-w-0 flex-1 truncate">{doc.title}</span>
+                            <span className="min-w-0 flex-1 whitespace-normal break-words text-left">{doc.title}</span>
                             <ExternalLink
                               className="h-3.5 w-3.5 shrink-0 opacity-50 transition-opacity group-hover:opacity-100"
                               aria-hidden="true"
@@ -119,7 +119,7 @@ export function TransparansiSection({ initialType = 'APBD' }: { initialType?: Do
                             title="Dokumen belum tersedia — URL belum diisi"
                           >
                             <FileText className="h-4 w-4 shrink-0 opacity-50" aria-hidden="true" />
-                            <span className="min-w-0 flex-1 truncate">{doc.title}</span>
+                            <span className="min-w-0 flex-1 whitespace-normal break-words text-left">{doc.title}</span>
                             <Badge
                               variant="outline"
                               className="ml-1 shrink-0 border-amber-300 bg-amber-50 text-[10px] font-semibold tracking-wide text-amber-700"

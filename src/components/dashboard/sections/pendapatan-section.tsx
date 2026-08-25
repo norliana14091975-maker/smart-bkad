@@ -26,6 +26,7 @@ import { LraSyncBadge, type LraSyncMetaDto } from '@/components/dashboard/lra-sy
 import { useSettings } from '@/hooks/use-settings'
 import { DEFAULT_SETTINGS } from '@/lib/default-settings'
 import { formatRupiah, formatRupiah0 } from '@/lib/format'
+import { AkunUraian } from '@/components/dashboard/akun-uraian'
 import type { BudgetItemDto } from '@/types/budget'
 
 async function fetchPendapatan(): Promise<{
@@ -235,8 +236,7 @@ function BudgetChartInline({
               rows.map((r) => (
                 <TableRow key={r.code}>
                   <TableCell className="font-medium">
-                    <span className="text-muted-foreground">{r.code} / </span>
-                    {r.name}
+                    <AkunUraian code={r.code} name={r.name} />
                   </TableCell>
                   <TableCell className="text-right tabular-nums">{formatRupiah(r.murni)}</TableCell>
                   {synced && (

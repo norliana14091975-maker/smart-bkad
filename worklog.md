@@ -441,3 +441,20 @@ Work Log:
 
 Stage Summary:
 - Dialog detail (RINCIAN per-SKPD) kini LAYAR PENUH memakai class modal-fullscreen yang reusable (cukup tambahkan pada DialogContent): kepala (judul+filter) tetap di atas, isi scroll dengan header tabel sticky per grup — terverifikasi exact fullscreen di desktop & mobile; tombol link Transparansi diperbaiki — dokumen dengan URL valid terbuka di tab baru, dokumen tanpa URL menampilkan badge "BELUM TERSEDIA" alih-alih link mati
+
+---
+Task ID: 23
+Agent: Z.ai Code (main)
+Task: Buat text penurun (nama akun turun ke baris baru) agar tidak terlalu panjang sehingga kolom Anggaran/Realisasi/% tetap terlihat — diterapkan seragam pada semua tabel agar lebih simple
+
+Work Log:
+- Analisis screenshot user: baris L6 (Sub Rincian Obyek) pada dialog rincian per-SKPD memiliki nama akun sangat panjang (hingga 141 karakter) yang memanjang horizontal tanpa batas sehingga kolom Anggaran/Realisasi/% tergeser keluar viewport (harus scroll kanan)
+- Komponen bersama baru src/components/dashboard/akun-uraian.tsx (AkunUraian + konstanta URAIAN_MAX_W): sel "Kode & Uraian" seragam — indentasi bertingkat L1-L6 (paddingLeft per level), kode rekening shrink-0 satu baris, nama akun terbungkus (whitespace-normal + break-words) dalam batas lebar responsif (max-w-[240px] sm:260 md:320 lg:400 xl:480 2xl:620); badge level opsional inline (withBadge); className bisa override batas lebar
+- PEMBELAJARAN PENTING: TableCell/TableHead shadcn mengandung whitespace-nowrap yang DIWARISI ke seluruh isi sel — break-words saja tidak cukup, span nama WAJIB whitespace-normal eksplisit (diagnosis via getComputedStyle: whiteSpace nowrap, scrollW 848 > clientW 265)
+- Diterapkan pada 12 file: skpd-detail-dialog, realisasi-akun-section (badge jadi inline via withBadge; import Badge/levelBadge dihapus), import-lra-panel, opd-dashboard-section (rincian L1-L6); admin-realisasi-section (uraian akun cap 160/210/250 + kolom OPD dibatasi 120/140 + nama SKPD cap 180/240/320), admin-budget-section, admin-opd-section, admin-transparansi-section (judul dokumen cap 200/280/360); pendapatan/belanja/pembiayaan-section (sel AKUN pakai AkunUraian code+name), realisasi-skpd-section (nama SKPD + badge RINCIAN dibatasi 170/230/320), transparansi-section publik (judul dokumen truncate -> wrap + header max-w-[560px])
+- Verifikasi browser desktop 1280: dialog rincian DINAS KESEHATAN kedua tabel scrollW 1230 = clientW 1230 (NOL overflow horizontal; sebelumnya 1459); nama 111 karakter turun 4 baris; kolom terakhir (%) tepat di 1255 < 1280 — Level/Kode&Uraian/Anggaran/Realisasi/% SEMUA terlihat tanpa scroll; Realisasi Per-Akun publik 3 tabel scrollW=clientW=974; Pendapatan (AKUN/Murni/APBDP/2025) & Belanja fit; Transparansi 16 baris fit; admin Per-SKPD/Item Anggaran/Data OPD/Dokumen Transparansi fit (974=974); admin Per-Akun 233 baris 8 kolom: nama terbatas+wrap (tinggi sel ~53px), sisa scroll horizontal minor bersifat struktural (8 kolom), fit penuh pada layar >= 1536
+- Verifikasi mobile 375x812: dialog tetap fullscreen exact (375x812 @ 0,0); nama panjang wrap 6 baris (disetel dari 9 dengan menaikkan base max-w 200->240px); tabel scroll horizontal wajar (755-819px) karena kolom angka tidak bisa menyusut
+- 0 error console (hanya warning aria-describedby pre-existing); seluruh route API 200 di dev.log; lint bersih
+
+Stage Summary:
+- Semua tabel yang menampilkan nama akun/OPD/dokumen kini memakai pola seragam AkunUraian: nama panjang otomatis TURUN ke baris berikutnya (multi-baris) alih-alih memanjang menyamping — kolom Anggaran/Realisasi/% selalu terlihat pada dialog fullscreen desktop & seluruh tabel publik/admin tanpa scroll horizontal; kunci teknis: override whitespace-nowrap warisan TableCell dengan whitespace-normal + break-words + max-width responsif per breakpoint

@@ -192,11 +192,11 @@ export function RealisasiSkpdSection() {
                 >
                   <TableCell className="text-center text-muted-foreground">{idx + 1}</TableCell>
                   <TableCell className="font-medium">
-                    <span className="inline-flex items-center gap-1.5">
-                      {d.name}
+                    <span className="inline-flex max-w-[170px] items-center gap-1.5 sm:max-w-[230px] lg:max-w-[320px]">
+                      <span className="min-w-0 whitespace-normal break-words">{d.name}</span>
                       {d.opdId && (
                         <span
-                          className="rounded bg-[#17408b]/10 px-1 py-0.5 font-mono text-[9px] font-bold text-[#17408b]"
+                          className="shrink-0 rounded bg-[#17408b]/10 px-1 py-0.5 font-mono text-[9px] font-bold text-[#17408b]"
                           title="Rincian tersedia"
                         >
                           RINCIAN

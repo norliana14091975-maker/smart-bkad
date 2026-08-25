@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ExternalLink, Plus, Trash2 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import { AkunUraian } from '@/components/dashboard/akun-uraian'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -171,7 +172,12 @@ export function AdminTransparansiSection() {
                 data.map((doc, idx) => (
                   <TableRow key={doc.id}>
                     <TableCell className="text-center text-muted-foreground">{idx + 1}</TableCell>
-                    <TableCell className="font-medium">{doc.title}</TableCell>
+                    <TableCell className="font-medium">
+                      <AkunUraian
+                        name={doc.title}
+                        className="max-w-[200px] sm:max-w-[280px] lg:max-w-[360px]"
+                      />
+                    </TableCell>
                     <TableCell className="max-w-[200px] truncate text-xs">
                       {doc.url && doc.url !== '#' ? (
                         <a

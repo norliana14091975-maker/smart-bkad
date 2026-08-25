@@ -14,11 +14,10 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { SectionHeading } from '@/components/dashboard/section-heading'
+import { AkunUraian } from '@/components/dashboard/akun-uraian'
 import { useSettings } from '@/hooks/use-settings'
 import { DEFAULT_SETTINGS } from '@/lib/default-settings'
-import { Badge } from '@/components/ui/badge'
 import { useToday } from '@/hooks/use-today'
-import { levelBadge } from '@/lib/kode-akun'
 import { useLevelFilter } from '@/hooks/use-level-filter'
 import { LevelFilterControls } from '@/components/dashboard/level-filter-controls'
 import { usePeriodeFilter, PeriodeFilterControls } from '@/components/dashboard/periode-filter-controls'
@@ -260,23 +259,7 @@ export function RealisasiAkunSection() {
                   <TableRow key={item.code}>
                     <TableCell className="text-center text-muted-foreground">{idx + 1}</TableCell>
                     <TableCell className="font-medium">
-                      <div
-                        className="flex items-baseline gap-2"
-                        style={{ paddingLeft: `${(item.level - 1) * 14}px` }}
-                      >
-                        <Badge
-                          variant="secondary"
-                          className={`shrink-0 whitespace-nowrap font-mono text-[10px] ${
-                            item.level <= 2 ? 'bg-[#17408b]/10 text-[#17408b]' : 'bg-muted'
-                          }`}
-                        >
-                          {levelBadge(item.level)}
-                        </Badge>
-                        <span>
-                          <span className="text-muted-foreground">{item.code} / </span>
-                          {item.name}
-                        </span>
-                      </div>
+                      <AkunUraian code={item.code} name={item.name} level={item.level} withBadge />
                     </TableCell>
                     <TableCell className="text-right tabular-nums">{formatRupiah(item.anggaran)}</TableCell>
                     <TableCell className="text-right tabular-nums">{formatRupiah(item.realisasi)}</TableCell>

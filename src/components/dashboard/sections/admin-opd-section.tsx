@@ -15,6 +15,7 @@ import {
   UserPlus,
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import { AkunUraian } from '@/components/dashboard/akun-uraian'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -249,7 +250,9 @@ export function AdminOpdSection() {
                 data.map((row) => (
                   <TableRow key={row.id}>
                     <TableCell className="font-mono text-xs">{row.code}</TableCell>
-                    <TableCell className="font-medium">{row.name}</TableCell>
+                    <TableCell className="font-medium">
+                      <AkunUraian name={row.name} />
+                    </TableCell>
                     <TableCell>
                       <span className="font-mono text-xs">{row.username ?? '—'}</span>
                     </TableCell>

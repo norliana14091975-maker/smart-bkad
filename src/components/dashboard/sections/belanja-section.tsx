@@ -27,6 +27,7 @@ import { useSettings } from '@/hooks/use-settings'
 import { DEFAULT_SETTINGS } from '@/lib/default-settings'
 import { LraSyncBadge, type LraSyncMetaDto } from '@/components/dashboard/lra-sync-badge'
 import { formatRupiah, formatRupiah0 } from '@/lib/format'
+import { AkunUraian } from '@/components/dashboard/akun-uraian'
 import type { BudgetItemDto, BudgetTabDto } from '@/types/budget'
 
 const SERIES_MURNI = { key: 'murni', label: '2026 Murni', color: '#f4a08a' }
@@ -216,8 +217,7 @@ export function BelanjaSection() {
                   rows.map((r) => (
                     <TableRow key={r.code}>
                       <TableCell className="font-medium">
-                        <span className="text-muted-foreground">{r.code} / </span>
-                        {r.name}
+                        <AkunUraian code={r.code} name={r.name} />
                       </TableCell>
                       <TableCell className="text-right tabular-nums">{formatRupiah(r.murni)}</TableCell>
                       {tabSynced && (

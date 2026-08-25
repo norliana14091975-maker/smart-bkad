@@ -42,6 +42,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { formatRupiah } from '@/lib/format'
+import { AkunUraian } from '@/components/dashboard/akun-uraian'
 import { SyncLraButton } from '@/components/dashboard/sync-lra-button'
 import type { BudgetItemRowDto } from '@/types/budget'
 
@@ -324,7 +325,9 @@ export function AdminBudgetSection() {
                 rows.map((row) => (
                   <TableRow key={row.id}>
                     <TableCell className="font-mono text-xs">{row.code}</TableCell>
-                    <TableCell className="font-medium">{row.name}</TableCell>
+                    <TableCell className="font-medium">
+                      <AkunUraian name={row.name} />
+                    </TableCell>
                     <TableCell className="text-right tabular-nums">{formatRupiah(row.amount)}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
