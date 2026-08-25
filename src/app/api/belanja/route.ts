@@ -51,9 +51,15 @@ export async function GET(request: NextRequest) {
     const data: BudgetTabDto[] = tabs.map((tab) => {
       const base = rowsByTab[tab]
       const prefix = TAB_PREFIX[tab]
-      if (!base || prefix === null) return base
+      if (!base) return base
 
-      const { items, apbdpItems, synced } = syncTabItems(base.items, sync, (r) => r.level === 3 && r.code.startsWith(`${prefix}.`))
+      // Tab per-urusan tidak memiliki padanan kode rekening LRA (filter null):
+      // baseline saat tersinkron, mengikuti 0 bila tidak ada data realisasi
+      const { items, apbdpItems, synced } = syncTabItems(
+        base.items,
+        sync,
+        prefix === null ? null : (r) => r.level === 3 && r.code.startsWith(`${prefix}.`)
+      )
       if (synced) anySynced = true
       return { ...base, items, apbdpItems }
     })

@@ -369,3 +369,25 @@ Work Log:
 
 Stage Summary:
 - Rule APBD Murni/Perubahan kini konsisten di SELURUH aplikasi: APBD & Pendapatan & Belanja & Pembiayaan selalu menampilkan anggaran MURNI (baseline) sebagai kolom utama, dan hasil import LRA tampil di kolom APBDP (Perubahan) yang terpisah — import tidak pernah menimpa murni; data murni yang terhapus dipulihkan; crash tab Pembiayaan diperbaiki
+
+---
+Task ID: 19
+Agent: Z.ai Code (main)
+Task: Perbaiki rule — ketika data realisasi 0 maka item anggaran dan data APBD mengikuti 0 sesuai peraturan berlaku
+
+Work Log:
+- Investigasi: user telah menghapus SELURUH data realisasi (realisasi_akun kosong) dan apbd_summary (kosong) — namun section Pendapatan/Belanja/Pembiayaan masih menampilkan anggaran baseline DKI (49,8T dst) dan APBD kosong tanpa baris; sesuai permintaan: ketika data realisasi 0 → seluruh tampilan anggaran harus mengikuti 0
+- src/lib/lra-sync.ts syncTabItems ditulis ulang dengan aturan berjenjang:
+  1. Tidak ada data realisasi sama sekali (!sync.available) → SELURUH item anggaran tab = 0 (tahun berjalan + pembanding)
+  2. LRA tersinkron → per akun: realisasi 0 / tidak ada di LRA → anggaran murni tahun berjalan = 0; realisasi > 0 → murni baseline; APBDP tetap = anggaran LRA
+  3. Tab tanpa padanan kode rekening LRA (per-urusan, filter null) → baseline saat tersinkron; ikut 0 bila tidak ada realisasi
+  4. Tab ber-padanan tapi tanpa baris LRA pada cakupannya → tahun berjalan = 0
+- metaFrom + noRealisasi flag; LraSyncBadge: catatan AMBER baru "Belum ada data realisasi (LRA) — item anggaran dan APBD tahun berjalan mengikuti 0. Import LRA melalui menu Import LRA (PDF) untuk mengisi data." (badge hijau tetap utk tersinkron)
+- /api/apbd ditulis ulang: realisasiKosong (!sync.available) → baris tahun berjalan 0/0 (baris existing dinolkan; bila apbd_summary kosong → DISINTESIS baris TA berjalan dari max tahun budgetItem/tahun kalender sehingga APBD tetap menampilkan "2026 | 0,00 | 0,00" bukan kosong); tahun sebelumnya baseline; saat tersinkron → per kategori realisasi 0 → murni 0, realisasi > 0 → murni baseline (baris existing) atau = anggaran LRA (baris sintesis), APBDP = anggaran LRA
+- /api/belanja: tab urusan kini lewat syncTabItems dgn filter null (ikut 0 saat realisasi kosong, baseline saat tersinkron); pendapatan & pembiayaan otomatis via syncTabItems baru
+- Uji jalur realisasi-0 (kondisi user saat ini): /api/apbd → 1 baris "2026: 0/0" + meta noRealisasi; /api/pendapatan & /api/belanja (semua tab termasuk urusan 88 item) → semua amount 0; browser: badge amber tampil di semua seksi, baris 2026 "0,00 | 0,00", tabel item "0,00", 0 sel bernilai non-nol
+- Uji jalur tersinkron (import uji kecamatan lalu dibersihkan): APBD sintesis — pendapatan realisasi 0 → APBD 0, APBDP 10jt; belanja realisasi > 0 → APBD = APBDP = 2,86M (anggaran LRA); per akun — 4.1.01 (tak ada di LRA) murni 0, 4.1.02 realisasi 0 → murni 0 + APBDP 10jt, 2025 tetap baseline pembanding; deteksi periode otomatis "s.d. Juli" bekerja
+- Data uji dibersihkan kembali ke kondisi kosong (realisasi_akun 0 baris, log uji dihapus); tanpa error console; lint bersih
+
+Stage Summary:
+- Aturan "realisasi 0 → anggaran 0" berlaku penuh: tanpa data LRA seluruh item anggaran (termasuk per-urusan) dan APBD tahun berjalan menampilkan 0 dengan badge amber penjelasan; setelah LRA diimport anggaran otomatis mengikuti data (per akun: terealisasi → murni baseline/LRA, tidak → 0; APBDP = anggaran LRA); APBD tetap menampilkan baris tahun berjalan (disintesis bila perlu) — tidak pernah kosong

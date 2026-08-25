@@ -1,16 +1,20 @@
 'use client'
 
-import { RefreshCw } from 'lucide-react'
+import { RefreshCw, ShieldAlert } from 'lucide-react'
 
 export interface LraSyncMetaDto {
   synced: boolean
   opdCount: number
   periodeLabel: string | null
+  /** True bila tidak ada data realisasi (LRA) sama sekali — anggaran mengikuti 0 */
+  noRealisasi?: boolean
 }
 
 /**
- * Penanda bahwa anggaran pada seksi ini tersinkron dengan data LRA yang
- * masuk (hasil import OPD/konsolidasi pada periode terakhir).
+ * Penanda status sinkronisasi anggaran pada suatu seksi:
+ * - Hijau : tersinkron dengan LRA terimport (hasil import OPD/konsolidasi).
+ * - Amber : belum ada data realisasi sama sekali — anggaran mengikuti 0
+ *           sesuai aturan (LRA adalah sumber data anggaran berjalan).
  */
 export function LraSyncBadge({
   meta,
@@ -19,6 +23,17 @@ export function LraSyncBadge({
   meta?: LraSyncMetaDto | null
   children?: React.ReactNode
 }) {
+  // Aturan realisasi 0: belum ada LRA → anggaran menampilkan 0
+  if (meta?.noRealisasi) {
+    return (
+      <p className="mb-4 flex flex-wrap items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
+        <ShieldAlert className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        Belum ada data realisasi (LRA) — item anggaran dan APBD tahun berjalan
+        mengikuti 0. Import LRA melalui menu Import LRA (PDF) untuk mengisi data.
+      </p>
+    )
+  }
+
   if (!meta?.synced) return null
 
   return (

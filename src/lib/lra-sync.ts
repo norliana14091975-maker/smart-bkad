@@ -121,6 +121,8 @@ export interface LraSyncMeta {
   synced: boolean
   opdCount: number
   periodeLabel: string | null
+  /** True bila tidak ada data realisasi (LRA) sama sekali — anggaran mengikuti 0 */
+  noRealisasi?: boolean
 }
 
 export function metaFrom(sync: LraSyncInfo, synced: boolean): LraSyncMeta {
@@ -128,6 +130,7 @@ export function metaFrom(sync: LraSyncInfo, synced: boolean): LraSyncMeta {
     synced: synced && sync.available,
     opdCount: sync.opdCount,
     periodeLabel: sync.periodeLabel,
+    noRealisasi: !sync.available,
   }
 }
 
@@ -150,17 +153,36 @@ export function lraTotal(
  * Gabungkan item anggaran statis (MURNI) dengan item LRA (APBDP) untuk satu
  * tab seksi (Pendapatan/Belanja/Pembiayaan) sesuai aturan APBD Murni/Perubahan:
  * - `items`     : anggaran MURNI — data statis tahun berjalan & sebelumnya
- *                 (TIDAK diubah oleh import LRA)
  * - `apbdpItems`: anggaran PERUBAHAN (APBDP) — hasil import LRA level jenis
  *                 pada tahun berjalan; null bila tidak ada LRA
+ *
+ * Aturan "realisasi 0 → anggaran 0" (Permendagri — LRA adalah sumber
+ * kebenaran data anggaran berjalan):
+ * 1. Tidak ada data realisasi sama sekali → SELURUH item anggaran = 0.
+ * 2. LRA tersinkron → per akun: realisasi 0 / tidak ada di LRA → anggaran
+ *    murni tahun berjalan = 0; realisasi > 0 → murni tetap dari baseline.
+ * 3. Tab tanpa padanan kode rekening LRA (filter null, mis. per-urusan):
+ *    baseline saat tersinkron, ikut 0 bila tidak ada realisasi.
  */
 export function syncTabItems(
   staticItems: BudgetItemDto[],
   sync: LraSyncInfo,
-  filter: (r: LraSyncRow) => boolean,
+  filter: ((r: LraSyncRow) => boolean) | null,
   year?: number
 ): { items: BudgetItemDto[]; apbdpItems: BudgetItemDto[] | null; synced: boolean } {
-  if (!sync.available) return { items: staticItems, apbdpItems: null, synced: false }
+  // 1) Tidak ada data realisasi sama sekali → item anggaran mengikuti 0
+  if (!sync.available) {
+    return {
+      items: staticItems.map((it) => ({ ...it, amount: 0 })),
+      apbdpItems: null,
+      synced: false,
+    }
+  }
+
+  // 3) Tab tanpa padanan kode rekening LRA → baseline apa adanya
+  if (filter === null) {
+    return { items: staticItems, apbdpItems: null, synced: false }
+  }
 
   const currentYear =
     year ?? staticItems.reduce((m, i) => Math.max(m, i.year), new Date().getFullYear())
@@ -168,7 +190,16 @@ export function syncTabItems(
   const inScope = sync.rows
     .filter(filter)
     .sort((a, b) => a.code.localeCompare(b.code))
-  if (inScope.length === 0) return { items: staticItems, apbdpItems: null, synced: false }
+  if (inScope.length === 0) {
+    // Tidak ada baris LRA pada cakupan tab → tahun berjalan mengikuti 0
+    return {
+      items: staticItems.map((it) =>
+        it.year === currentYear ? { ...it, amount: 0 } : it
+      ),
+      apbdpItems: null,
+      synced: false,
+    }
+  }
 
   // APBDP = anggaran hasil import LRA (level jenis) untuk tahun berjalan
   const apbdpItems: BudgetItemDto[] = inScope.map((r) => ({
@@ -178,6 +209,17 @@ export function syncTabItems(
     amount: r.anggaran,
   }))
 
-  // Murni tetap dari data statis apa adanya
-  return { items: staticItems, apbdpItems, synced: true }
+  // 2) Per akun: realisasi 0 / tidak ada di LRA → murni tahun berjalan = 0
+  const realisasiByCode = new Map<string, number>()
+  for (const r of sync.rows) {
+    realisasiByCode.set(r.code, (realisasiByCode.get(r.code) ?? 0) + r.realisasi)
+  }
+  const items = staticItems.map((it) => {
+    if (it.year !== currentYear) return it
+    const rea = realisasiByCode.get(it.code)
+    if (rea === undefined || rea === 0) return { ...it, amount: 0 }
+    return it
+  })
+
+  return { items, apbdpItems, synced: true }
 }
