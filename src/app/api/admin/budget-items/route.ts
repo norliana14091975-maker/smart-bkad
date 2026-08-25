@@ -161,6 +161,22 @@ export async function DELETE(req: Request) {
     if (!user) return unauthorized()
 
     const { searchParams } = new URL(req.url)
+
+    // all=1 → hapus SELURUH item anggaran (semua bagian, tab, dan tahun)
+    if (searchParams.get('all') === '1') {
+      const res = await db.budgetItem.deleteMany({})
+      return NextResponse.json({ data: { ok: true, deleted: res.count } })
+    }
+
+    // Hapus per cakupan (section+tab+year) bila ketiga filter diberikan
+    const section = searchParams.get('section')?.trim() ?? ''
+    const tab = searchParams.get('tab')?.trim() ?? ''
+    const year = Number(searchParams.get('year'))
+    if (section && tab && Number.isInteger(year) && year >= 1900 && year <= 2200) {
+      const res = await db.budgetItem.deleteMany({ where: { section, tab, year } })
+      return NextResponse.json({ data: { ok: true, deleted: res.count } })
+    }
+
     const id = Number(searchParams.get('id'))
     if (!Number.isInteger(id) || id <= 0) {
       return NextResponse.json({ error: 'Parameter id wajib diisi' }, { status: 400 })

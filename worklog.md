@@ -406,3 +406,22 @@ Work Log:
 
 Stage Summary:
 - Kelola Data APBD & Kelola Item Anggaran kembali tampil (data murni baseline dipulihkan); Pendapatan/Belanja/Pembiayaan kini SELALU menampilkan APBD murni (baseline) di kolom utama — hasil import LRA hanya tampil di kolom APBDP terpisah; aturan realisasi-0 tetap berlaku hanya saat tidak ada LRA sama sekali (badge amber)
+
+---
+Task ID: 21
+Agent: Z.ai Code (main)
+Task: Tombol "Hapus Semua" pada Kelola Ringkasan APBD Tahunan & Kelola Item Anggaran + tombol "Sinkron dari LRA" untuk mengambil data anggaran dari LRA yang diupload
+
+Work Log:
+- API DELETE /api/admin/apbd: parameter all=1 → deleteMany seluruh baris apbd_summary (respons berisi jumlah baris terhapus); jalur hapus per tahun tetap ada
+- API DELETE /api/admin/budget-items: parameter all=1 → deleteMany seluruh budget_item; dukungan hapus per cakupan (section+tab+year) bila ketiga filter diberikan; jalur hapus per id tetap ada
+- API baru /api/admin/sync-lra (GET + POST, admin only): GET = pratinjau tanpa menulis DB (sumber LRA: jumlah OPD/nama/periode, rencana item level jenis per bagian+tab, total per kategori, jumlah item tahun tsb yang akan diganti); POST = eksekusi dalam SATU TRANSAKSI — hapus seluruh budget_item tahun target → buat item dari baris LRA level 3 (4.x.yy→pendapatan/utama, 5.1-5.4→ops/mdl/ttdg/tf, 6.1/6.2→terima/keluar) → upsert apbd_summary tahun tsb dengan total anggaran LRA (diisi ke field APBD sekaligus APBDP — anggaran LRA menjadi baseline setelah sinkron); tahun target default tahun kalender berjalan (validasi 2000-2100, bisa dioverride via body); total per kategori memakai logika prefix yang sama dengan /api/apbd (has61/has62); error 400 bila belum ada data LRA sama sekali
+- Komponen bersama src/components/dashboard/sync-lra-button.tsx: tombol "Sinkron dari LRA" (outline biru, ikon RefreshCw) → dialog pratinjau (sumber LRA + periode, tabel target tahun & total per kategori + jumlah akun, peringatan penggantian item tahun tsb) → "Sinkronkan Sekarang" → toast hasil + invalidasi query (admin-apbd, admin-budget, admin-overview, apbd, pendapatan, belanja, pembiayaan); tampil pesan amber bila belum ada LRA
+- UI AdminApbdSection (Kelola Ringkasan APBD Tahunan): tombol "Sinkron dari LRA" + "Hapus Semua" (outline merah, disabled saat kosong) + konfirmasi AlertDialog dengan jumlah baris; setelah hapus semua → invalidasi admin-apbd + apbd
+- UI AdminBudgetSection (Kelola Item Anggaran): tombol "Sinkron dari LRA" + "Hapus Semua" (dengan jumlah total item dari query semua item) + konfirmasi AlertDialog (menyarankan Sinkron dari LRA untuk mengisi ulang); setelah hapus semua → invalidasi admin-budget + apbd + pendapatan/belanja/pembiayaan
+- Verifikasi API (curl): preview menunjukkan LRA Dinas Kesehatan periode 7 → rencana 7 item (1 pendapatan + 6 belanja), total pendapatan 10.339.384.365 & belanja 140.472.002.239,25; POST sinkron → replaced 2 / created 7; DELETE all apbd → deleted 1; DELETE all budget-items → deleted 77; keadaan kosong → /api/apbd tetap mensintesis baris 2026 dari LRA; sinkron ulang idempoten
+- Verifikasi browser (agent-browser): login admin → Kelola Data APBD menampilkan ketiga tombol + baris 2026 hasil sinkron; dialog sinkron menampilkan pratinjau (s.d. Juli, TA 2026, total per kategori, jumlah akun) dan eksekusi berhasil; Hapus Semua → tabel kosong + tombol disabled → sinkron ulang via UI → data kembali; alur sama di Kelola Item Anggaran (hapus semua → "Tidak ada data pada filter ini" → sinkron ulang → item 5.1.01 dst kembali); seksi publik APBD/Pendapatan/Belanja menampilkan kolom "2026 Murni | 2026 APBDP (Perubahan) | 2025" dengan nilai LRA; layout mobile (375px) responsif; 0 error console; dev.log bersih (semua route 200); lint bersih
+- Data akhir DB (mengikuti alur kerja user: bersihkan baseline DKI → sinkron LRA): budget_item = 7 item LRA 2026, apbd_summary = 1 baris 2026 (total LRA); backup data lama (72 item DKI) disimpan di /tmp/backup-budget-items.json & /tmp/backup-apbd.json
+
+Stage Summary:
+- Kelola Ringkasan APBD Tahunan & Kelola Item Anggaran kini punya tombol "Hapus Semua" (konfirmasi + jumlah data) dan tombol "Sinkron dari LRA" (pratinjau sumber LRA → eksekusi transaksional); sinkronisasi mengambil anggaran LRA terimport (level jenis, agregat seluruh OPD pada periode terakhir) menjadi item anggaran + ringkasan APBD tahun berjalan — APBD murni & APBDP sama-sama berisi anggaran LRA setelah sinkron; dashboard publik langsung mengikuti data hasil sinkron

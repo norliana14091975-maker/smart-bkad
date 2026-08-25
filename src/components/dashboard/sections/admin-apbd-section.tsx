@@ -35,6 +35,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { formatRupiah0 } from '@/lib/format'
+import { SyncLraButton } from '@/components/dashboard/sync-lra-button'
 import type { ApbdSummaryDto } from '@/types/budget'
 
 async function fetchApbdAdmin(): Promise<ApbdSummaryDto[]> {
@@ -91,6 +92,8 @@ export function AdminApbdSection() {
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [deleteYear, setDeleteYear] = useState<number | null>(null)
+  const [deleteAllOpen, setDeleteAllOpen] = useState(false)
+  const [deletingAll, setDeletingAll] = useState(false)
 
   function openAdd() {
     setForm(EMPTY_FORM)
@@ -161,15 +164,47 @@ export function AdminApbdSection() {
     }
   }
 
+  async function handleDeleteAll() {
+    setDeletingAll(true)
+    try {
+      const res = await fetch('/api/admin/apbd?all=1', { method: 'DELETE' })
+      const json = (await res.json()) as { data?: { deleted?: number }; error?: string }
+      if (!res.ok) throw new Error(json.error ?? 'Gagal menghapus')
+      toast({
+        title: 'Seluruh ringkasan APBD dihapus',
+        description: `${json.data?.deleted ?? 0} baris ringkasan tahunan dihapus permanen.`,
+      })
+      await queryClient.invalidateQueries({ queryKey: ['admin-apbd'] })
+      await queryClient.invalidateQueries({ queryKey: ['apbd'] })
+    } catch (err) {
+      toast({ title: 'Gagal menghapus semua', description: String(err), variant: 'destructive' })
+    } finally {
+      setDeletingAll(false)
+      setDeleteAllOpen(false)
+    }
+  }
+
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-base font-bold uppercase tracking-wide text-foreground">
           Kelola Ringkasan APBD Tahunan
         </h2>
-        <Button onClick={openAdd} size="sm" className="bg-[#17408b] text-white hover:bg-[#12326e]">
-          <Plus className="h-4 w-4" aria-hidden="true" /> Tambah Tahun
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <SyncLraButton />
+          <Button
+            onClick={() => setDeleteAllOpen(true)}
+            size="sm"
+            variant="outline"
+            disabled={!data || data.length === 0}
+            className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+          >
+            <Trash2 className="h-4 w-4" aria-hidden="true" /> Hapus Semua
+          </Button>
+          <Button onClick={openAdd} size="sm" className="bg-[#17408b] text-white hover:bg-[#12326e]">
+            <Plus className="h-4 w-4" aria-hidden="true" /> Tambah Tahun
+          </Button>
+        </div>
       </div>
 
       {isError && (
@@ -295,6 +330,33 @@ export function AdminApbdSection() {
             <AlertDialogCancel>Batal</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} className="bg-destructive text-white hover:bg-destructive/90">
               Hapus
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Konfirmasi hapus semua */}
+      <AlertDialog open={deleteAllOpen} onOpenChange={setDeleteAllOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Hapus SEMUA ringkasan APBD tahunan?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Seluruh {data?.length ?? 0} baris ringkasan APBD (semua tahun) akan dihapus
+              permanen. Halaman APBD publik akan kembali menampilkan baris tahun berjalan
+              dari data LRA/sintesis. Tindakan ini tidak dapat dibatalkan.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingAll}>Batal</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault()
+                handleDeleteAll()
+              }}
+              disabled={deletingAll}
+              className="bg-destructive text-white hover:bg-destructive/90"
+            >
+              {deletingAll ? 'Menghapus…' : 'Ya, Hapus Semua'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

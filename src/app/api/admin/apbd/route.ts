@@ -115,6 +115,13 @@ export async function DELETE(req: Request) {
     if (!user) return unauthorized()
 
     const { searchParams } = new URL(req.url)
+
+    // all=1 → hapus SELURUH ringkasan APBD tahunan (semua tahun)
+    if (searchParams.get('all') === '1') {
+      const res = await db.apbdSummary.deleteMany({})
+      return NextResponse.json({ data: { ok: true, deleted: res.count } })
+    }
+
     const year = Number(searchParams.get('year'))
     if (!Number.isInteger(year) || year < 1900 || year > 2200) {
       return NextResponse.json({ error: 'Parameter year wajib diisi' }, { status: 400 })

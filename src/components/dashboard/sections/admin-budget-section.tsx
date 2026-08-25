@@ -42,6 +42,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { formatRupiah } from '@/lib/format'
+import { SyncLraButton } from '@/components/dashboard/sync-lra-button'
 import type { BudgetItemRowDto } from '@/types/budget'
 
 const SECTION_TABS: Record<string, { value: string; label: string }[]> = {
@@ -89,6 +90,13 @@ async function fetchItems(section: string, tab: string, year: string): Promise<B
   return json.data
 }
 
+async function fetchAllItems(): Promise<BudgetItemRowDto[]> {
+  const res = await fetch('/api/admin/budget-items')
+  if (!res.ok) throw new Error('Gagal memuat item anggaran')
+  const json = (await res.json()) as { data: BudgetItemRowDto[] }
+  return json.data
+}
+
 export function AdminBudgetSection() {
   const { toast } = useToast()
   const queryClient = useQueryClient()
@@ -105,10 +113,18 @@ export function AdminBudgetSection() {
     queryFn: () => fetchItems(section, activeTab, year),
   })
 
+  // Seluruh item (semua bagian/tab/tahun) — untuk jumlah pada konfirmasi hapus semua
+  const { data: allItems } = useQuery({
+    queryKey: ['admin-budget', 'all'],
+    queryFn: fetchAllItems,
+  })
+
   const [dialogOpen, setDialogOpen] = useState(false)
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [deleteId, setDeleteId] = useState<number | null>(null)
+  const [deleteAllOpen, setDeleteAllOpen] = useState(false)
+  const [deletingAll, setDeletingAll] = useState(false)
 
   function handleSectionChange(value: string) {
     setSection(value)
@@ -189,6 +205,29 @@ export function AdminBudgetSection() {
     }
   }
 
+  async function handleDeleteAll() {
+    setDeletingAll(true)
+    try {
+      const res = await fetch('/api/admin/budget-items?all=1', { method: 'DELETE' })
+      const json = (await res.json()) as { data?: { deleted?: number }; error?: string }
+      if (!res.ok) throw new Error(json.error ?? 'Gagal menghapus')
+      toast({
+        title: 'Seluruh item anggaran dihapus',
+        description: `${json.data?.deleted ?? 0} item pada semua bagian, tab, dan tahun dihapus permanen.`,
+      })
+      await queryClient.invalidateQueries({ queryKey: ['admin-budget'] })
+      await queryClient.invalidateQueries({ queryKey: ['apbd'] })
+      await queryClient.invalidateQueries({ queryKey: ['pendapatan'] })
+      await queryClient.invalidateQueries({ queryKey: ['belanja'] })
+      await queryClient.invalidateQueries({ queryKey: ['pembiayaan'] })
+    } catch (err) {
+      toast({ title: 'Gagal menghapus semua', description: String(err), variant: 'destructive' })
+    } finally {
+      setDeletingAll(false)
+      setDeleteAllOpen(false)
+    }
+  }
+
   const rows = useMemo(() => data ?? [], [data])
 
   return (
@@ -240,6 +279,16 @@ export function AdminBudgetSection() {
             </SelectContent>
           </Select>
         </div>
+        <SyncLraButton />
+        <Button
+          onClick={() => setDeleteAllOpen(true)}
+          size="sm"
+          variant="outline"
+          disabled={!allItems || allItems.length === 0}
+          className="h-9 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+        >
+          <Trash2 className="h-4 w-4" aria-hidden="true" /> Hapus Semua
+        </Button>
         <Button onClick={openAdd} size="sm" className="h-9 bg-[#17408b] text-white hover:bg-[#12326e]">
           <Plus className="h-4 w-4" aria-hidden="true" /> Tambah
         </Button>
@@ -427,6 +476,34 @@ export function AdminBudgetSection() {
             <AlertDialogCancel>Batal</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} className="bg-destructive text-white hover:bg-destructive/90">
               Hapus
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Konfirmasi hapus semua */}
+      <AlertDialog open={deleteAllOpen} onOpenChange={setDeleteAllOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Hapus SEMUA item anggaran?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Seluruh {allItems?.length ?? 0} item anggaran pada semua bagian, tab, dan tahun
+              akan dihapus permanen. Gunakan tombol <strong>Sinkron dari LRA</strong> untuk
+              mengisi ulang dari data LRA yang telah diimport. Tindakan ini tidak dapat
+              dibatalkan.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingAll}>Batal</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault()
+                handleDeleteAll()
+              }}
+              disabled={deletingAll}
+              className="bg-destructive text-white hover:bg-destructive/90"
+            >
+              {deletingAll ? 'Menghapus…' : 'Ya, Hapus Semua'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
