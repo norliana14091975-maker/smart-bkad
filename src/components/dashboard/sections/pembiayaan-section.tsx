@@ -29,15 +29,14 @@ import { LraSyncBadge, type LraSyncMetaDto } from '@/components/dashboard/lra-sy
 import { formatRupiah, formatRupiah0 } from '@/lib/format'
 import type { BudgetItemDto, BudgetTabDto } from '@/types/budget'
 
-const SERIES = [
-  { key: 'y2026', label: '2026', color: '#7da7f5' },
-  { key: 'y2025', label: '2025', color: '#1e3fd0' },
-]
+const SERIES_MURNI = { key: 'murni', label: '2026 Murni', color: '#7da7f5' }
+const SERIES_APBDP = { key: 'apbdp', label: '2026 APBDP (Perubahan)', color: '#f59e0b' }
+const SERIES_2025 = { key: 'y2025', label: '2025', color: '#1e3fd0' }
 
-const SERIES_KELUAR = [
-  { key: 'y2026', label: '2026', color: '#f3ce4a' },
-  { key: 'y2025', label: '2025', color: '#e07b00' },
-]
+// varian warna tab pengeluaran (oranye)
+const SERIES_MURNI_K = { key: 'murni', label: '2026 Murni', color: '#f3ce4a' }
+const SERIES_APBDP_K = { key: 'apbdp', label: '2026 APBDP (Perubahan)', color: '#f59e0b' }
+const SERIES_2025_K = { key: 'y2025', label: '2025', color: '#e07b00' }
 
 type TabKey = 'terima' | 'keluar'
 
@@ -46,6 +45,14 @@ async function fetchPembiayaan(): Promise<{ tabs: BudgetTabDto[]; meta?: LraSync
   if (!res.ok) throw new Error('Gagal memuat data pembiayaan')
   const json = (await res.json()) as { data: BudgetTabDto[]; meta?: LraSyncMetaDto }
   return { tabs: json.data, meta: json.meta }
+}
+
+interface PembiayaanRow {
+  code: string
+  name: string
+  murni: number
+  apbdp: number | null
+  y2025: number
 }
 
 export function PembiayaanSection() {
@@ -60,32 +67,53 @@ export function PembiayaanSection() {
 
   const tabsData = data?.tabs
 
-  const rows = useMemo(() => {
+  // gabungkan murni/APBDP/2025 per kode akun untuk tab aktif
+  const rows = useMemo<PembiayaanRow[]>(() => {
     const tabData = tabsData?.find((t) => t.tab === tab)
-    const byCode = new Map<string, { code: string; name: string; y2026: number; y2025: number }>()
+    const byCode = new Map<string, PembiayaanRow>()
     for (const it of tabData?.items ?? []) {
-      const existing = byCode.get(it.code) ?? { code: it.code, name: it.name, y2026: 0, y2025: 0 }
-      if (it.year === 2026) existing.y2026 = it.amount
+      const existing =
+        byCode.get(it.code) ??
+        { code: it.code, name: it.name, murni: 0, apbdp: null, y2025: 0 }
+      if (it.year === 2026) existing.murni = it.amount
       if (it.year === 2025) existing.y2025 = it.amount
       byCode.set(it.code, existing)
     }
-    return Array.from(byCode.values())
+    for (const it of tabData?.apbdpItems ?? []) {
+      const existing =
+        byCode.get(it.code) ??
+        { code: it.code, name: it.name, murni: 0, apbdp: null, y2025: 0 }
+      existing.apbdp = it.amount
+      byCode.set(it.code, existing)
+    }
+    return Array.from(byCode.values()).sort((a, b) => a.code.localeCompare(b.code))
   }, [tabsData, tab])
 
-  const series = tab === 'terima' ? SERIES : SERIES_KELUAR
+  const tabSynced =
+    (tabsData?.find((t) => t.tab === tab)?.apbdpItems?.length ?? 0) > 0
+
+  const series = tabSynced
+    ? tab === 'terima'
+      ? [SERIES_MURNI, SERIES_APBDP, SERIES_2025]
+      : [SERIES_MURNI_K, SERIES_APBDP_K, SERIES_2025_K]
+    : tab === 'terima'
+      ? [SERIES_MURNI, SERIES_2025]
+      : [SERIES_MURNI_K, SERIES_2025_K]
 
   const chartData = rows.map((r) => ({
     name: r.code,
-    y2026: r.y2026 / 1e12,
+    murni: r.murni / 1e12,
+    apbdp: r.apbdp !== null ? r.apbdp / 1e12 : null,
     y2025: r.y2025 / 1e12,
   }))
 
   const total = useMemo(
     () => ({
-      y2026: rows.reduce((a, r) => a + r.y2026, 0),
+      murni: rows.reduce((a, r) => a + r.murni, 0),
+      apbdp: tabSynced ? rows.reduce((a, r) => a + (r.apbdp ?? 0), 0) : null,
       y2025: rows.reduce((a, r) => a + r.y2025, 0),
     }),
-    [rows]
+    [rows, tabSynced]
   )
 
   return (
@@ -166,14 +194,19 @@ export function PembiayaanSection() {
               <TableHeader>
                 <TableRow className="bg-muted/60">
                   <TableHead className="min-w-[320px]">AKUN</TableHead>
-                  <TableHead className="text-right whitespace-nowrap">2026</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">2026 Murni</TableHead>
+              {tabSynced && (
+                <TableHead className="text-right whitespace-nowrap">
+                  2026 APBDP (Perubahan)
+                </TableHead>
+              )}
                   <TableHead className="text-right whitespace-nowrap">2025</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={3}>
+                    <TableCell colSpan={tabSynced ? 4 : 3}>
                       <Skeleton className="h-5 w-full" />
                     </TableCell>
                   </TableRow>
@@ -184,7 +217,12 @@ export function PembiayaanSection() {
                         <span className="text-muted-foreground">{r.code} / </span>
                         {r.name}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">{formatRupiah(r.y2026)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{formatRupiah(r.murni)}</TableCell>
+                      {tabSynced && (
+                        <TableCell className="text-right tabular-nums">
+                          {r.apbdp !== null ? formatRupiah(r.apbdp) : '—'}
+                        </TableCell>
+                      )}
                       <TableCell className="text-right tabular-nums">{formatRupiah(r.y2025)}</TableCell>
                     </TableRow>
                   ))
@@ -192,7 +230,12 @@ export function PembiayaanSection() {
                 {!isLoading && (
                   <TableRow className="bg-muted/70 font-bold">
                     <TableCell>JUMLAH</TableCell>
-                    <TableCell className="text-right tabular-nums">{formatRupiah(total.y2026)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatRupiah(total.murni)}</TableCell>
+                {tabSynced && (
+                  <TableCell className="text-right tabular-nums">
+                    {total.apbdp !== null ? formatRupiah(total.apbdp) : '—'}
+                  </TableCell>
+                )}
                     <TableCell className="text-right tabular-nums">{formatRupiah(total.y2025)}</TableCell>
                   </TableRow>
                 )}

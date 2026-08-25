@@ -46,13 +46,13 @@ export async function GET(request: NextRequest) {
     // tahun sebelumnya tetap dari baseline untuk pembanding
     let anySynced = false
     const data: BudgetTabDto[] = staticTabs.map((t) => {
-      const { items, synced } = syncTabItems(
+      const { items, apbdpItems, synced } = syncTabItems(
         t.items,
         sync,
         (r) => r.group === 'PENDAPATAN' && r.level === 3
       )
       if (synced) anySynced = true
-      return { ...t, items }
+      return { ...t, items, apbdpItems }
     })
 
     return NextResponse.json({ data, meta: metaFrom(sync, anySynced) })

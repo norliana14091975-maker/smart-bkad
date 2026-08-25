@@ -353,3 +353,19 @@ Work Log:
 
 Stage Summary:
 - Nama pemerintah daerah kini satu pengaturan (govName) yang berlaku di semua halaman — tidak ada lagi teks DKI Jakarta yang statis; rule APBD Murni vs APBD Perubahan diterapkan pada sinkronisasi: import LRA mengubah anggaran → masuk kolom APBDP sebagai kategori perubahan (penambahan/pengurangan), APBD murni tidak pernah tertimpa
+
+---
+Task ID: 18
+Agent: Z.ai Code (main)
+Task: Perbaiki rule APBD murni tidak tampil — kolom anggaran Pendapatan/Belanja/Pembiayaan menampilkan nilai import (APBDP) alih-alih murni
+
+Work Log:
+- Akar masalah 1 (DATA): tabel apbd_summary di database berisi 0 untuk semua nilai & hanya 1 baris 2026 (data murni terhapus, kemungkinan dari edit Admin → Data APBD yang tersimpan nilai kosong) → dipulihkan langsung via SQL dari nilai seed baseline (5 tahun 2022-2026) TANPA menyentuh data LRA import user (opd:1/233, opd:3/109, opd:4/323 tetap utuh)
+- Akar masalah 2 (RULE): syncTabItems Task 14 MENGGANTI anggaran tahun berjalan dengan nilai LRA sehingga kolom 2026 menampilkan nilai import (contoh: Pajak Daerah 0 alih-alih murni 49,8T) — bertentangan dgn rule Task 17 (APBD murni tetap, perubahan masuk APBDP)
+- Perbaikan rule: syncTabItems ditulis ulang — items = MURNI (baseline statis, TIDAK diubah import) + apbdpItems = hasil import LRA (array terpisah); types BudgetTabDto + apbdpItems?: BudgetItemDto[] | null; 3 API route (pendapatan/belanja/pembiayaan) mengembalikan keduanya
+- UI 3 section ditulis ulang: kolom tabel kini "AKUN | 2026 Murni | 2026 APBDP (Perubahan) | 2025" (kolom APBDP hanya tampil saat tersinkron; kode tanpa LRA menampilkan "—"); chart 3 seri saat tersinkron (Murni hijau muda, APBDP oranye, 2025 hijau tua — varian warna oranye utk tab pengeluaran pembiayaan); baris JUMLAH per kolom; badge penjelasan "kolom Murni tetap, hasil import masuk kategori APBDP"
+- Perbaikan crash pembiayaan: setelah refactor, referensi SERIES/SERIES_KELUAR lama tidak terhapus (variable undefined → client-side exception saat buka tab Pembiayaan) → diganti series dinamis per tab (terima biru / keluar oranye) dgn varian Murni/APBDP/2025
+- Verifikasi: API — pendapatan 4.1.01 Murni 49.898.218.773.411 + APBDP "—" (tanpa LRA) + 2025 48T; belanja 5.1.01 Murni 21.431.736.563.104 + APBDP 85.598.807.836; pembiayaan 6.1.01 Murni 5.052.674.866.043 + APBDP 103.796.664.924; /api/apbd 2026 APBD 71.450.673.065.697 (murni) + APBDP 973.840.871.515 (LRA), 2025 tidak berubah; browser — APBD baris 2026 "71.450.673.065.697,00 | 973.840.871.515,00", Pendapatan "4.1.01 | 49.898.218.773.411,00 | — | 48.000.000.000.000,00", Pembiayaan "AKUN | 2026 Murni | 2026 APBDP (Perubahan) | 2025" dgn JUMLAH benar; tanpa error console; lint bersih
+
+Stage Summary:
+- Rule APBD Murni/Perubahan kini konsisten di SELURUH aplikasi: APBD & Pendapatan & Belanja & Pembiayaan selalu menampilkan anggaran MURNI (baseline) sebagai kolom utama, dan hasil import LRA tampil di kolom APBDP (Perubahan) yang terpisah — import tidak pernah menimpa murni; data murni yang terhapus dipulihkan; crash tab Pembiayaan diperbaiki

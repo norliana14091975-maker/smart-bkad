@@ -53,9 +53,9 @@ export async function GET(request: NextRequest) {
       const prefix = TAB_PREFIX[tab]
       if (!base || prefix === null) return base
 
-      const { items, synced } = syncTabItems(base.items, sync, (r) => r.level === 3 && r.code.startsWith(`${prefix}.`))
+      const { items, apbdpItems, synced } = syncTabItems(base.items, sync, (r) => r.level === 3 && r.code.startsWith(`${prefix}.`))
       if (synced) anySynced = true
-      return { ...base, items }
+      return { ...base, items, apbdpItems }
     })
 
     return NextResponse.json({ data, meta: metaFrom(sync, anySynced) })

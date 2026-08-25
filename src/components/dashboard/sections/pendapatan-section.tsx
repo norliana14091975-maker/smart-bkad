@@ -2,27 +2,48 @@
 
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { BudgetChart, type ChartRow } from '@/components/dashboard/budget-chart'
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Legend,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
+import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import { SectionHeading } from '@/components/dashboard/section-heading'
+import { LraSyncBadge, type LraSyncMetaDto } from '@/components/dashboard/lra-sync-badge'
 import { useSettings } from '@/hooks/use-settings'
 import { DEFAULT_SETTINGS } from '@/lib/default-settings'
-import { LraSyncBadge, type LraSyncMetaDto } from '@/components/dashboard/lra-sync-badge'
-import { formatRupiah } from '@/lib/format'
+import { formatRupiah, formatRupiah0 } from '@/lib/format'
 import type { BudgetItemDto } from '@/types/budget'
 
-const SERIES = [
-  { key: 'y2026', label: '2026', color: '#86c67c' },
-  { key: 'y2025', label: '2025', color: '#1e7a34' },
-]
-
-async function fetchPendapatan(): Promise<{ items: BudgetItemDto[]; meta?: LraSyncMetaDto }> {
+async function fetchPendapatan(): Promise<{
+  items: BudgetItemDto[]
+  apbdpItems: BudgetItemDto[] | null
+  meta?: LraSyncMetaDto
+}> {
   const res = await fetch('/api/pendapatan?tabs=utama')
   if (!res.ok) throw new Error('Gagal memuat data pendapatan')
   const json = (await res.json()) as {
-    data: { items: BudgetItemDto[] }[]
+    data: { items: BudgetItemDto[]; apbdpItems?: BudgetItemDto[] | null }[]
     meta?: LraSyncMetaDto
   }
-  return { items: json.data[0]?.items ?? [], meta: json.meta }
+  return {
+    items: json.data[0]?.items ?? [],
+    apbdpItems: json.data[0]?.apbdpItems ?? null,
+    meta: json.meta,
+  }
 }
 
 export function PendapatanSection() {
@@ -35,58 +56,69 @@ export function PendapatanSection() {
   })
 
   const items = data?.items ?? []
+  const apbdpItems = data?.apbdpItems ?? null
+  const synced = apbdpItems !== null && apbdpItems.length > 0
 
-  // gabungkan item 2026 & 2025 per kode akun
+  // Gabungkan item murni & APBDP per kode akun:
+  // - murni / y2025 dari data statis (baseline)
+  // - apbdp dari hasil import LRA (null bila kode tak ada di LRA)
   const rows = useMemo(() => {
-    const byCode = new Map<string, { code: string; name: string; y2026: number; y2025: number }>()
+    const byCode = new Map<
+      string,
+      { code: string; name: string; murni: number; apbdp: number | null; y2025: number }
+    >()
     for (const it of items) {
-      const existing = byCode.get(it.code) ?? { code: it.code, name: it.name, y2026: 0, y2025: 0 }
-      if (it.year === 2026) existing.y2026 = it.amount
+      const existing =
+        byCode.get(it.code) ??
+        { code: it.code, name: it.name, murni: 0, apbdp: null, y2025: 0 }
+      if (it.year === 2026) existing.murni = it.amount
       if (it.year === 2025) existing.y2025 = it.amount
       byCode.set(it.code, existing)
     }
-    return Array.from(byCode.values())
-  }, [items])
-
-  const chartRows: ChartRow[] = rows.map((r) => ({
-    label: r.code,
-    values: { y2026: r.y2026, y2025: r.y2025 },
-  }))
+    for (const it of apbdpItems ?? []) {
+      const existing =
+        byCode.get(it.code) ??
+        { code: it.code, name: it.name, murni: 0, apbdp: null, y2025: 0 }
+      existing.apbdp = it.amount
+      byCode.set(it.code, existing)
+    }
+    return Array.from(byCode.values()).sort((a, b) => a.code.localeCompare(b.code))
+  }, [items, apbdpItems])
 
   const total = useMemo(
     () => ({
-      y2026: rows.reduce((a, r) => a + r.y2026, 0),
+      murni: rows.reduce((a, r) => a + r.murni, 0),
+      apbdp: synced ? rows.reduce((a, r) => a + (r.apbdp ?? 0), 0) : null,
       y2025: rows.reduce((a, r) => a + r.y2025, 0),
     }),
-    [rows]
+    [rows, synced]
   )
 
   return (
     <div>
-      <SectionHeading
-        title="Anggaran Pendapatan"
-        subtitle={govName}
-      />
+      <SectionHeading title="Anggaran Pendapatan" subtitle={govName} />
       {isError && (
         <p className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
           Gagal memuat data pendapatan.
         </p>
       )}
 
-      <LraSyncBadge meta={data?.meta} />
+      <LraSyncBadge meta={data?.meta}>
+        Anggaran perubahan (APBDP) tersinkron dengan LRA terimport
+        {data?.meta && data.meta.opdCount > 0 && <>&nbsp;({data.meta.opdCount} OPD/SKPD)</>}
+        <span className="font-normal text-emerald-800">
+          &nbsp;— kolom Murni tetap, hasil import masuk kategori APBDP
+        </span>
+      </LraSyncBadge>
+
       <div className="rounded-lg border bg-muted/40 p-4 sm:p-5">
         <h3 className="mb-3 text-center text-sm font-bold uppercase tracking-widest text-foreground/80">
           Anggaran Pendapatan per Akun
         </h3>
         <BudgetChartInline
-          rows={chartRows}
+          rows={rows}
           loading={isLoading}
-          tableRows={rows.map((r) => ({
-            code: r.code,
-            name: r.name,
-            y2026: r.y2026,
-            y2025: r.y2025,
-          }))}
+          synced={synced}
           total={total}
         />
       </div>
@@ -94,50 +126,45 @@ export function PendapatanSection() {
   )
 }
 
-import { Skeleton } from '@/components/ui/skeleton'
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Legend,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import { formatRupiah0 } from '@/lib/format'
+// ---------------------------------------------------------------------------
+// Chart + tabel inline (mendukung mode Murni/APBDP/2025)
+// ---------------------------------------------------------------------------
 
-interface InlineRow {
+type SectionRow = {
   code: string
   name: string
-  y2026: number
+  murni: number
+  apbdp: number | null
   y2025: number
 }
+
+const SERIES_MURNI = { key: 'murni', label: '2026 Murni', color: '#86c67c' }
+const SERIES_APBDP = { key: 'apbdp', label: '2026 APBDP (Perubahan)', color: '#f59e0b' }
+const SERIES_2025 = { key: 'y2025', label: '2025', color: '#1e7a34' }
 
 function BudgetChartInline({
   rows,
   loading,
-  tableRows,
+  synced,
   total,
 }: {
-  rows: ChartRow[]
+  rows: SectionRow[]
   loading: boolean
-  tableRows: InlineRow[]
-  total: { y2026: number; y2025: number }
+  synced: boolean
+  total: { murni: number; apbdp: number | null; y2025: number }
 }) {
+  const series = synced
+    ? [SERIES_MURNI, SERIES_APBDP, SERIES_2025]
+    : [SERIES_MURNI, SERIES_2025]
+
   const data = rows.map((r) => ({
-    name: r.label,
-    y2026: r.values.y2026 / 1e12,
-    y2025: r.values.y2025 / 1e12,
+    name: r.code,
+    murni: r.murni / 1e12,
+    apbdp: r.apbdp !== null ? r.apbdp / 1e12 : null,
+    y2025: r.y2025 / 1e12,
   }))
+
+  const colCount = synced ? 4 : 3
 
   return (
     <>
@@ -161,12 +188,14 @@ function BudgetChartInline({
                 }}
               />
               <Tooltip
-                formatter={(value: number | string) => formatRupiah0(Number(value) * 1e12)}
+                formatter={(value: number | string) =>
+                  formatRupiah0(Number(value) * 1e12)
+                }
                 labelStyle={{ fontWeight: 700 }}
                 contentStyle={{ borderRadius: 8, fontSize: 12 }}
               />
               <Legend wrapperStyle={{ fontSize: 12 }} iconType="square" />
-              {SERIES.map((s) => (
+              {series.map((s) => (
                 <Bar
                   key={s.key}
                   dataKey={s.key}
@@ -186,25 +215,35 @@ function BudgetChartInline({
           <TableHeader>
             <TableRow className="bg-muted/60">
               <TableHead className="min-w-[320px]">AKUN</TableHead>
-              <TableHead className="text-right whitespace-nowrap">2026</TableHead>
+              <TableHead className="text-right whitespace-nowrap">2026 Murni</TableHead>
+              {synced && (
+                <TableHead className="text-right whitespace-nowrap">
+                  2026 APBDP (Perubahan)
+                </TableHead>
+              )}
               <TableHead className="text-right whitespace-nowrap">2025</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={3}>
+                <TableCell colSpan={colCount}>
                   <Skeleton className="h-5 w-full" />
                 </TableCell>
               </TableRow>
             ) : (
-              tableRows.map((r) => (
+              rows.map((r) => (
                 <TableRow key={r.code}>
                   <TableCell className="font-medium">
                     <span className="text-muted-foreground">{r.code} / </span>
                     {r.name}
                   </TableCell>
-                  <TableCell className="text-right tabular-nums">{formatRupiah(r.y2026)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{formatRupiah(r.murni)}</TableCell>
+                  {synced && (
+                    <TableCell className="text-right tabular-nums">
+                      {r.apbdp !== null ? formatRupiah(r.apbdp) : '—'}
+                    </TableCell>
+                  )}
                   <TableCell className="text-right tabular-nums">{formatRupiah(r.y2025)}</TableCell>
                 </TableRow>
               ))
@@ -212,7 +251,12 @@ function BudgetChartInline({
             {!loading && (
               <TableRow className="bg-muted/70 font-bold">
                 <TableCell>JUMLAH</TableCell>
-                <TableCell className="text-right tabular-nums">{formatRupiah(total.y2026)}</TableCell>
+                <TableCell className="text-right tabular-nums">{formatRupiah(total.murni)}</TableCell>
+                {synced && (
+                  <TableCell className="text-right tabular-nums">
+                    {total.apbdp !== null ? formatRupiah(total.apbdp) : '—'}
+                  </TableCell>
+                )}
                 <TableCell className="text-right tabular-nums">{formatRupiah(total.y2025)}</TableCell>
               </TableRow>
             )}

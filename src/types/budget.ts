@@ -17,6 +17,8 @@ export interface BudgetTabDto {
   tab: string
   label: string
   items: BudgetItemDto[]
+  /** Anggaran APBDP (perubahan) hasil import LRA tahun berjalan; null bila belum tersinkron */
+  apbdpItems?: BudgetItemDto[] | null
 }
 
 export interface RealisasiAkunDto {

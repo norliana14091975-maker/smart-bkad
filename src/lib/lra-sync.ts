@@ -147,49 +147,37 @@ export function lraTotal(
 }
 
 /**
- * Gabungkan item anggaran statis dengan item LRA untuk satu tab seksi
- * (Pendapatan/Belanja/Pembiayaan):
- * - tahun berjalan: dari LRA (level jenis) — kode tanpa LRA bernilai 0
- * - tahun sebelumnya: dari data statis (pembanding)
- * Bila LRA tidak memiliki baris pada cakupan tab, kembalikan statis apa adanya.
+ * Gabungkan item anggaran statis (MURNI) dengan item LRA (APBDP) untuk satu
+ * tab seksi (Pendapatan/Belanja/Pembiayaan) sesuai aturan APBD Murni/Perubahan:
+ * - `items`     : anggaran MURNI — data statis tahun berjalan & sebelumnya
+ *                 (TIDAK diubah oleh import LRA)
+ * - `apbdpItems`: anggaran PERUBAHAN (APBDP) — hasil import LRA level jenis
+ *                 pada tahun berjalan; null bila tidak ada LRA
  */
 export function syncTabItems(
   staticItems: BudgetItemDto[],
   sync: LraSyncInfo,
   filter: (r: LraSyncRow) => boolean,
   year?: number
-): { items: BudgetItemDto[]; synced: boolean } {
-  if (!sync.available) return { items: staticItems, synced: false }
+): { items: BudgetItemDto[]; apbdpItems: BudgetItemDto[] | null; synced: boolean } {
+  if (!sync.available) return { items: staticItems, apbdpItems: null, synced: false }
 
   const currentYear =
     year ?? staticItems.reduce((m, i) => Math.max(m, i.year), new Date().getFullYear())
-  const prevYear = currentYear - 1
 
   const inScope = sync.rows
     .filter(filter)
     .sort((a, b) => a.code.localeCompare(b.code))
-  if (inScope.length === 0) return { items: staticItems, synced: false }
+  if (inScope.length === 0) return { items: staticItems, apbdpItems: null, synced: false }
 
-  const staticPrev = new Map(
-    staticItems.filter((i) => i.year === prevYear).map((i) => [i.code, i.amount])
-  )
-  const staticCur = staticItems.filter((i) => i.year === currentYear)
+  // APBDP = anggaran hasil import LRA (level jenis) untuk tahun berjalan
+  const apbdpItems: BudgetItemDto[] = inScope.map((r) => ({
+    code: r.code,
+    name: r.name,
+    year: currentYear,
+    amount: r.anggaran,
+  }))
 
-  const out: BudgetItemDto[] = []
-  const seen = new Set<string>()
-
-  for (const r of inScope) {
-    out.push({ code: r.code, name: r.name, year: currentYear, amount: r.anggaran })
-    out.push({ code: r.code, name: r.name, year: prevYear, amount: staticPrev.get(r.code) ?? 0 })
-    seen.add(r.code)
-  }
-  // Kode statis tanpa baris LRA → tahun berjalan bernilai 0 (belum ada data masuk)
-  for (const i of staticCur) {
-    if (seen.has(i.code)) continue
-    out.push({ code: i.code, name: i.name, year: currentYear, amount: 0 })
-    out.push({ code: i.code, name: i.name, year: prevYear, amount: staticPrev.get(i.code) ?? 0 })
-  }
-
-  out.sort((a, b) => a.code.localeCompare(b.code) || b.year - a.year)
-  return { items: out, synced: true }
+  // Murni tetap dari data statis apa adanya
+  return { items: staticItems, apbdpItems, synced: true }
 }
