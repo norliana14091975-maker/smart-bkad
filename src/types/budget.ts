@@ -229,6 +229,22 @@ export interface UserCredentialsDto {
   password: string
 }
 
+// ---------------------------------------------------------------------------
+// Tipe untuk konfigurasi AI Copilot (admin)
+// ---------------------------------------------------------------------------
+
+/** Info konfigurasi AI Copilot untuk UI admin — API key selalu dimasker */
+export interface CopilotSettingsDto {
+  provider: string
+  providerLabel: string
+  /** Base URL efektif (tersimpan atau default provider); null untuk bawaan */
+  baseUrl: string | null
+  model: string | null
+  hasApiKey: boolean
+  apiKeyMasked: string | null
+  requiresKey: boolean
+}
+
 // Data untuk Dashboard OPD (profil + realisasi SKPD miliknya)
 export interface RealisasiGroupDto {
   pendapatan: { anggaran: number; realisasi: number }

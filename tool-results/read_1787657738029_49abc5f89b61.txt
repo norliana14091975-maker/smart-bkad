@@ -1,0 +1,688 @@
+     1→'use client'
+     2→
+     3→import { useRef, useState } from 'react'
+     4→import { useQueryClient } from '@tanstack/react-query'
+     5→import { Loader2, RotateCcw, Save, Trash2, Upload } from 'lucide-react'
+     6→import { useToast } from '@/hooks/use-toast'
+     7→import { useSettings } from '@/hooks/use-settings'
+     8→import { Button } from '@/components/ui/button'
+     9→import {
+    10→  AlertDialog,
+    11→  AlertDialogAction,
+    12→  AlertDialogCancel,
+    13→  AlertDialogContent,
+    14→  AlertDialogDescription,
+    15→  AlertDialogFooter,
+    16→  AlertDialogHeader,
+    17→  AlertDialogTitle,
+    18→} from '@/components/ui/alert-dialog'
+    19→import { Input } from '@/components/ui/input'
+    20→import { Label } from '@/components/ui/label'
+    21→import { Skeleton } from '@/components/ui/skeleton'
+    22→import { Textarea } from '@/components/ui/textarea'
+    23→import { DkiEmblem, GoldEmblem } from '@/components/dashboard/emblem'
+    24→import { DEFAULT_SETTINGS } from '@/lib/default-settings'
+    25→import type { AppSettingsDto } from '@/types/budget'
+    26→
+    27→type TextKey =
+    28→  | 'appName'
+    29→  | 'appTitle'
+    30→  | 'appDescription'
+    31→  | 'govName'
+    32→  | 'brandText'
+    33→  | 'brandSubtext'
+    34→  | 'footerText'
+    35→
+    36→/** Pilihan warna header populer untuk pemerintahan daerah */
+    37→const PRESET_HEADER_COLORS = [
+    38→  '#17408b', // biru laut (bawaan)
+    39→  '#1d4ed8', // biru cerah
+    40→  '#0f766e', // teal
+    41→  '#15803d', // hijau
+    42→  '#b45309', // oranye keemasan
+    43→  '#b91c1c', // merah marun
+    44→  '#581c87', // ungu tua
+    45→  '#374151', // abu gelap
+    46→]
+    47→
+    48→const TEXT_FIELDS: {
+    49→  key: TextKey
+    50→  label: string
+    51→  placeholder: string
+    52→  max: number
+    53→  textarea?: boolean
+    54→  hint?: string
+    55→}[] = [
+    56→  {
+    57→    key: 'appName',
+    58→    label: 'Nama Aplikasi',
+    59→    placeholder: 'DASHBOARD',
+    60→    max: 40,
+    61→    hint: 'Tampil sebagai teks brand di sidebar.',
+    62→  },
+    63→  {
+    64→    key: 'appTitle',
+    65→    label: 'Judul Halaman',
+    66→    placeholder: 'Dashboard Keuangan DKI',
+    67→    max: 100,
+    68→    hint: 'Tampil pada tab/judul browser.',
+    69→  },
+    70→  {
+    71→    key: 'appDescription',
+    72→    label: 'Deskripsi Aplikasi',
+    73→    placeholder: 'Dashboard monitoring pengelolaan keuangan daerah…',
+    74→    max: 300,
+    75→    textarea: true,
+    76→    hint: 'Meta description untuk mesin pencari.',
+    77→  },
+    78→  {
+    79→    key: 'govName',
+    80→    label: 'Nama Pemerintah Daerah',
+    81→    placeholder: 'Pemerintah Kabupaten Seruyan',
+    82→    max: 100,
+    83→    hint: 'Tampil sebagai sub-judul di seluruh halaman dashboard.',
+    84→  },
+    85→  {
+    86→    key: 'brandText',
+    87→    label: 'Teks Brand Header',
+    88→    placeholder: 'BPKD',
+    89→    max: 30,
+    90→    hint: 'Teks utama di pita biru bagian atas.',
+    91→  },
+    92→  {
+    93→    key: 'brandSubtext',
+    94→    label: 'Sub-teks Brand Header',
+    95→    placeholder: 'Provinsi DKI Jakarta',
+    96→    max: 60,
+    97→  },
+    98→  {
+    99→    key: 'footerText',
+   100→    label: 'Teks Footer',
+   101→    placeholder: 'Dashboard Monitoring Pengelolaan Keuangan Daerah — …',
+   102→    max: 200,
+   103→    textarea: true,
+   104→  },
+   105→]
+   106→
+   107→export function AdminSettingsSection() {
+   108→  const { toast } = useToast()
+   109→  const queryClient = useQueryClient()
+   110→  const { data, isLoading } = useSettings()
+   111→
+   112→  // draf perubahan teks; nilai efektif = draf > data > bawaan
+   113→  const [draft, setDraft] = useState<Partial<Record<TextKey, string>>>({})
+   114→  const [saving, setSaving] = useState(false)
+   115→  const [resetOpen, setResetOpen] = useState(false)
+   116→  const [uploading, setUploading] = useState<'logo' | 'sidebar-logo' | 'emblem' | 'favicon' | null>(null)
+   117→
+   118→  const logoInputRef = useRef<HTMLInputElement>(null)
+   119→  const sidebarLogoInputRef = useRef<HTMLInputElement>(null)
+   120→  const emblemInputRef = useRef<HTMLInputElement>(null)
+   121→  const faviconInputRef = useRef<HTMLInputElement>(null)
+   122→
+   123→  // Draf warna header (hex); null = belum diubah (ikut data server)
+   124→  const [headerColorDraft, setHeaderColorDraft] = useState<string | null>(null)
+   125→  const headerColorValue = headerColorDraft ?? (data?.headerColor ?? '')
+   126→
+   127→  // Simpan warna header lewat endpoint yang sama dengan teks
+   128→  async function saveHeaderColor(value: string) {
+   129→    const color = value.trim()
+   130→    if (color !== '' && !/^#[0-9a-fA-F]{6}$/.test(color)) {
+   131→      toast({ title: 'Warna tidak valid', description: 'Gunakan kode hex #rrggbb.', variant: 'destructive' })
+   132→      return
+   133→    }
+   134→    try {
+   135→      const res = await fetch('/api/admin/settings', {
+   136→        method: 'PUT',
+   137→        headers: { 'Content-Type': 'application/json' },
+   138→        body: JSON.stringify({ headerColor: color }),
+   139→      })
+   140→      const json = (await res.json()) as { data?: AppSettingsDto; error?: string }
+   141→      if (!res.ok || !json.data) throw new Error(json.error ?? 'Gagal menyimpan warna')
+   142→      setHeaderColorDraft(null)
+   143→      toast({ title: color ? 'Warna header diperbarui' : 'Warna header kembali ke gradien bawaan' })
+   144→      await queryClient.invalidateQueries({ queryKey: ['settings'] })
+   145→    } catch (err) {
+   146→      toast({ title: 'Gagal menyimpan warna', description: String(err), variant: 'destructive' })
+   147→    }
+   148→  }
+   149→
+   150→  const value = (key: TextKey): string => {
+   151→    if (draft[key] !== undefined) return draft[key]
+   152→    const current = data?.[key]
+   153→    if (typeof current === 'string') return current
+   154→    return DEFAULT_SETTINGS[key]
+   155→  }
+   156→
+   157→  const dirty = TEXT_FIELDS.some((f) => draft[f.key] !== undefined)
+   158→
+   159→  async function handleSave() {
+   160→    if (saving) return
+   161→    setSaving(true)
+   162→    try {
+   163→      const body: Record<string, string> = {}
+   164→      for (const f of TEXT_FIELDS) body[f.key] = value(f.key)
+   165→      const res = await fetch('/api/admin/settings', {
+   166→        method: 'PUT',
+   167→        headers: { 'Content-Type': 'application/json' },
+   168→        body: JSON.stringify(body),
+   169→      })
+   170→      const json = (await res.json()) as { data?: AppSettingsDto; error?: string }
+   171→      if (!res.ok || !json.data) throw new Error(json.error ?? 'Gagal menyimpan')
+   172→      toast({ title: 'Pengaturan tersimpan' })
+   173→      setDraft({})
+   174→      await queryClient.invalidateQueries({ queryKey: ['settings'] })
+   175→    } catch (err) {
+   176→      toast({ title: 'Gagal menyimpan', description: String(err), variant: 'destructive' })
+   177→    } finally {
+   178→      setSaving(false)
+   179→    }
+   180→  }
+   181→
+   182→  async function uploadImage(kind: 'logo' | 'sidebar-logo' | 'emblem' | 'favicon', file: File) {
+   183→    const ref =
+   184→      kind === 'logo'
+   185→        ? logoInputRef
+   186→        : kind === 'sidebar-logo'
+   187→          ? sidebarLogoInputRef
+   188→          : kind === 'emblem'
+   189→            ? emblemInputRef
+   190→            : faviconInputRef
+   191→    if (ref) {
+   192→      // reset nilai input agar file bernama sama bisa diunggah ulang
+   193→      if (ref.current) ref.current.value = ''
+   194→    }
+   195→    if (!file.type.startsWith('image/')) {
+   196→      toast({ title: 'File bukan gambar', description: 'Pilih file PNG/JPG/GIF/WebP/SVG/ICO.', variant: 'destructive' })
+   197→      return
+   198→    }
+   199→    if (file.size > 2 * 1024 * 1024) {
+   200→      toast({ title: 'File terlalu besar', description: 'Ukuran maksimum 2 MB.', variant: 'destructive' })
+   201→      return
+   202→    }
+   203→    setUploading(kind)
+   204→    try {
+   205→      const fd = new FormData()
+   206→      fd.append('file', file)
+   207→      const res = await fetch(`/api/admin/settings/${kind}`, { method: 'POST', body: fd })
+   208→      const json = (await res.json()) as {
+   209→        data?: { logoUrl?: string; sidebarLogoUrl?: string; emblemUrl?: string; faviconUrl?: string }
+   210→        error?: string
+   211→      }
+   212→      if (!res.ok || !json.data) throw new Error(json.error ?? 'Gagal mengunggah')
+   213→      toast({
+   214→        title:
+   215→          kind === 'logo'
+   216→            ? 'Logo diperbarui'
+   217→            : kind === 'sidebar-logo'
+   218→              ? 'Logo pojok kiri diperbarui'
+   219→              : kind === 'emblem'
+   220→                ? 'Lencana pojok kanan diperbarui'
+   221→                : 'Favicon diperbarui',
+   222→      })
+   223→      await queryClient.invalidateQueries({ queryKey: ['settings'] })
+   224→    } catch (err) {
+   225→      toast({ title: 'Gagal mengunggah', description: String(err), variant: 'destructive' })
+   226→    } finally {
+   227→      setUploading(null)
+   228→    }
+   229→  }
+   230→
+   231→  async function removeImage(kind: 'logo' | 'sidebar-logo' | 'emblem' | 'favicon') {
+   232→    try {
+   233→      const res = await fetch(`/api/admin/settings/${kind}`, { method: 'DELETE' })
+   234→      if (!res.ok) throw new Error('Gagal menghapus')
+   235→      toast({
+   236→        title:
+   237→          kind === 'logo'
+   238→            ? 'Logo kustom dihapus'
+   239→            : kind === 'sidebar-logo'
+   240→              ? 'Logo pojok kiri kembali mengikuti Logo Aplikasi'
+   241→              : kind === 'emblem'
+   242→                ? 'Lencana pojok kanan kembali ke emblem emas bawaan'
+   243→                : 'Favicon kustom dihapus',
+   244→      })
+   245→      await queryClient.invalidateQueries({ queryKey: ['settings'] })
+   246→    } catch (err) {
+   247→      toast({ title: 'Gagal menghapus', description: String(err), variant: 'destructive' })
+   248→    }
+   249→  }
+   250→
+   251→  async function handleReset() {
+   252→    try {
+   253→      const res = await fetch('/api/admin/settings/reset', { method: 'POST' })
+   254→      if (!res.ok) throw new Error('Gagal mereset')
+   255→      toast({ title: 'Semua pengaturan dikembalikan ke bawaan' })
+   256→      setDraft({})
+   257→      await queryClient.invalidateQueries({ queryKey: ['settings'] })
+   258→    } catch (err) {
+   259→      toast({ title: 'Gagal mereset', description: String(err), variant: 'destructive' })
+   260→    }
+   261→  }
+   262→
+   263→  return (
+   264→    <div>
+   265→      <h2 className="mb-4 text-base font-bold uppercase tracking-wide text-foreground">
+   266→        Pengaturan Aplikasi
+   267→      </h2>
+   268→
+   269→      {/* Identitas aplikasi */}
+   270→      <section className="mb-5 rounded-lg border bg-card p-4 shadow-sm sm:p-5">
+   271→        <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-foreground/80">
+   272→          Identitas Aplikasi
+   273→        </h3>
+   274→        <p className="mb-4 text-xs text-muted-foreground">
+   275→          Ubah nama aplikasi, judul halaman, dan teks brand yang tampil di seluruh dashboard.
+   276→        </p>
+   277→
+   278→        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+   279→          {TEXT_FIELDS.map((f) => (
+   280→            <div key={f.key} className={f.textarea ? 'sm:col-span-2' : ''}>
+   281→              <Label htmlFor={`set-${f.key}`} className="mb-1.5 flex items-center justify-between">
+   282→                <span>{f.label}</span>
+   283→                <span className="text-[10px] font-normal text-muted-foreground">
+   284→                  {value(f.key).length}/{f.max}
+   285→                </span>
+   286→              </Label>
+   287→              {f.textarea ? (
+   288→                <Textarea
+   289→                  id={`set-${f.key}`}
+   290→                  value={value(f.key)}
+   291→                  placeholder={f.placeholder}
+   292→                  maxLength={f.max}
+   293→                  rows={2}
+   294→                  onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))}
+   295→                />
+   296→              ) : (
+   297→                <Input
+   298→                  id={`set-${f.key}`}
+   299→                  value={value(f.key)}
+   300→                  placeholder={f.placeholder}
+   301→                  maxLength={f.max}
+   302→                  onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))}
+   303→                />
+   304→              )}
+   305→              {f.hint && <p className="mt-1 text-[11px] text-muted-foreground">{f.hint}</p>}
+   306→            </div>
+   307→          ))}
+   308→        </div>
+   309→
+   310→        <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+   311→          {dirty && (
+   312→            <Button variant="ghost" size="sm" onClick={() => setDraft({})}>
+   313→              <RotateCcw className="h-4 w-4" aria-hidden="true" /> Batalkan Perubahan
+   314→            </Button>
+   315→          )}
+   316→          <Button
+   317→            onClick={handleSave}
+   318→            disabled={saving || isLoading}
+   319→            size="sm"
+   320→            className="bg-[#17408b] text-white hover:bg-[#12326e]"
+   321→          >
+   322→            {saving ? (
+   323→              <>
+   324→                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Menyimpan…
+   325→              </>
+   326→            ) : (
+   327→              <>
+   328→                <Save className="h-4 w-4" aria-hidden="true" /> Simpan Pengaturan
+   329→              </>
+   330→            )}
+   331→          </Button>
+   332→        </div>
+   333→      </section>
+   334→
+   335→      {/* Logo & Favicon */}
+   336→      <div className="mb-5 grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+   337→        <section className="rounded-lg border bg-card p-4 shadow-sm sm:p-5">
+   338→          <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-foreground/80">
+   339→            Logo Aplikasi
+   340→          </h3>
+   341→          <p className="mb-4 text-xs text-muted-foreground">
+   342→            Tampil di pita header (dan jadi fallback logo pojok kiri sidebar).
+   343→            PNG/JPG/GIF/WebP/SVG/ICO, maks 2 MB.
+   344→          </p>
+   345→          <div className="flex items-center gap-4">
+   346→            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-lg border bg-muted/30 p-2">
+   347→              {isLoading ? (
+   348→                <Skeleton className="h-14 w-14" />
+   349→              ) : data?.logoUrl ? (
+   350→                <img src={data.logoUrl} alt="Logo aplikasi" className="h-16 w-16 object-contain" />
+   351→              ) : (
+   352→                <DkiEmblem className="h-14 w-14" />
+   353→              )}
+   354→            </div>
+   355→            <div className="min-w-0 flex-1">
+   356→              <p className="text-xs font-semibold text-foreground">
+   357→                {data?.logoUrl ? 'Logo kustom aktif' : 'Menggunakan emblem bawaan'}
+   358→              </p>
+   359→              <div className="mt-2 flex flex-wrap gap-2">
+   360→                <input
+   361→                  ref={logoInputRef}
+   362→                  type="file"
+   363→                  accept="image/*,.ico,.svg"
+   364→                  className="sr-only"
+   365→                  onChange={(e) => {
+   366→                    const file = e.target.files?.[0]
+   367→                    if (file) void uploadImage('logo', file)
+   368→                  }}
+   369→                />
+   370→                <Button
+   371→                  variant="outline"
+   372→                  size="sm"
+   373→                  onClick={() => logoInputRef.current?.click()}
+   374→                  disabled={uploading === 'logo'}
+   375→                >
+   376→                  {uploading === 'logo' ? (
+   377→                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+   378→                  ) : (
+   379→                    <Upload className="h-4 w-4" aria-hidden="true" />
+   380→                  )}
+   381→                  Unggah Logo
+   382→                </Button>
+   383→                {data?.logoUrl && (
+   384→                  <Button
+   385→                    variant="outline"
+   386→                    size="sm"
+   387→                    onClick={() => removeImage('logo')}
+   388→                    className="text-destructive hover:text-destructive"
+   389→                  >
+   390→                    <Trash2 className="h-4 w-4" aria-hidden="true" /> Hapus
+   391→                  </Button>
+   392→                )}
+   393→              </div>
+   394→            </div>
+   395→          </div>
+   396→        </section>
+   397→
+   398→        <section className="rounded-lg border bg-card p-4 shadow-sm sm:p-5">
+   399→          <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-foreground/80">
+   400→            Logo Pojok Kiri (Sidebar)
+   401→          </h3>
+   402→          <p className="mb-4 text-xs text-muted-foreground">
+   403→            Logo kecil di pojok kiri atas aplikasi. Bila kosong, mengikuti Logo Aplikasi.
+   404→            PNG/JPG/GIF/WebP/SVG/ICO, maks 2 MB.
+   405→          </p>
+   406→          <div className="flex items-center gap-4">
+   407→            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-lg border bg-[#1b2a4a] p-2">
+   408→              {isLoading ? (
+   409→                <Skeleton className="h-12 w-12" />
+   410→              ) : data?.sidebarLogoUrl || data?.logoUrl ? (
+   411→                <img
+   412→                  src={data.sidebarLogoUrl ?? data.logoUrl ?? undefined}
+   413→                  alt="Logo pojok kiri"
+   414→                  className="h-14 w-14 rounded object-contain"
+   415→                />
+   416→              ) : (
+   417→                <DkiEmblem className="h-12 w-12" />
+   418→              )}
+   419→            </div>
+   420→            <div className="min-w-0 flex-1">
+   421→              <p className="text-xs font-semibold text-foreground">
+   422→                {data?.sidebarLogoUrl
+   423→                  ? 'Logo pojok kiri kustom aktif'
+   424→                  : data?.logoUrl
+   425→                    ? 'Mengikuti Logo Aplikasi'
+   426→                    : 'Menggunakan emblem bawaan'}
+   427→              </p>
+   428→              <div className="mt-2 flex flex-wrap gap-2">
+   429→                <input
+   430→                  ref={sidebarLogoInputRef}
+   431→                  type="file"
+   432→                  accept="image/*,.ico,.svg"
+   433→                  className="sr-only"
+   434→                  onChange={(e) => {
+   435→                    const file = e.target.files?.[0]
+   436→                    if (file) void uploadImage('sidebar-logo', file)
+   437→                  }}
+   438→                />
+   439→                <Button
+   440→                  variant="outline"
+   441→                  size="sm"
+   442→                  onClick={() => sidebarLogoInputRef.current?.click()}
+   443→                  disabled={uploading === 'sidebar-logo'}
+   444→                >
+   445→                  {uploading === 'sidebar-logo' ? (
+   446→                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+   447→                  ) : (
+   448→                    <Upload className="h-4 w-4" aria-hidden="true" />
+   449→                  )}
+   450→                  Unggah Logo Pojok Kiri
+   451→                </Button>
+   452→                {data?.sidebarLogoUrl && (
+   453→                  <Button
+   454→                    variant="outline"
+   455→                    size="sm"
+   456→                    onClick={() => removeImage('sidebar-logo')}
+   457→                    className="text-destructive hover:text-destructive"
+   458→                  >
+   459→                    <Trash2 className="h-4 w-4" aria-hidden="true" /> Hapus
+   460→                  </Button>
+   461→                )}
+   462→              </div>
+   463→            </div>
+   464→          </div>
+   465→        </section>
+   466→
+   467→        <section className="rounded-lg border bg-card p-4 shadow-sm sm:p-5">
+   468→          <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-foreground/80">
+   469→            Logo Pojok Kanan (Lencana)
+   470→          </h3>
+   471→          <p className="mb-4 text-xs text-muted-foreground">
+   472→            Logo/lencana di pojok kanan pita header. Bila kosong, memakai emblem emas bawaan.
+   473→            PNG/JPG/GIF/WebP/SVG/ICO, maks 2 MB.
+   474→          </p>
+   475→          <div className="flex items-center gap-4">
+   476→            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-lg border bg-gradient-to-r from-[#17408b] to-[#1d4ed8] p-2">
+   477→              {isLoading ? (
+   478→                <Skeleton className="h-14 w-14" />
+   479→              ) : data?.emblemUrl ? (
+   480→                <img src={data.emblemUrl} alt="Lencana aplikasi" className="h-16 w-16 object-contain" />
+   481→              ) : (
+   482→                <GoldEmblem className="h-16 w-16" />
+   483→              )}
+   484→            </div>
+   485→            <div className="min-w-0 flex-1">
+   486→              <p className="text-xs font-semibold text-foreground">
+   487→                {data?.emblemUrl ? 'Lencana kustom aktif' : 'Menggunakan emblem emas bawaan'}
+   488→              </p>
+   489→              <div className="mt-2 flex flex-wrap gap-2">
+   490→                <input
+   491→                  ref={emblemInputRef}
+   492→                  type="file"
+   493→                  accept="image/*,.ico,.svg"
+   494→                  className="sr-only"
+   495→                  onChange={(e) => {
+   496→                    const file = e.target.files?.[0]
+   497→                    if (file) void uploadImage('emblem', file)
+   498→                  }}
+   499→                />
+   500→                <Button
+   501→                  variant="outline"
+   502→                  size="sm"
+   503→                  onClick={() => emblemInputRef.current?.click()}
+   504→                  disabled={uploading === 'emblem'}
+   505→                >
+   506→                  {uploading === 'emblem' ? (
+   507→                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+   508→                  ) : (
+   509→                    <Upload className="h-4 w-4" aria-hidden="true" />
+   510→                  )}
+   511→                  Unggah Lencana
+   512→                </Button>
+   513→                {data?.emblemUrl && (
+   514→                  <Button
+   515→                    variant="outline"
+   516→                    size="sm"
+   517→                    onClick={() => removeImage('emblem')}
+   518→                    className="text-destructive hover:text-destructive"
+   519→                  >
+   520→                    <Trash2 className="h-4 w-4" aria-hidden="true" /> Hapus
+   521→                  </Button>
+   522→                )}
+   523→              </div>
+   524→            </div>
+   525→          </div>
+   526→        </section>
+   527→
+   528→        <section className="rounded-lg border bg-card p-4 shadow-sm sm:p-5">
+   529→          <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-foreground/80">
+   530→            Warna Header
+   531→          </h3>
+   532→          <p className="mb-4 text-xs text-muted-foreground">
+   533→            Warna latar pita header atas. Bila kosong, memakai gradien biru bawaan.
+   534→          </p>
+   535→          <div className="flex flex-wrap items-center gap-2">
+   536→            {(PRESET_HEADER_COLORS).map((c) => (
+   537→              <button
+   538→                key={c}
+   539→                type="button"
+   540→                onClick={() => void saveHeaderColor(c)}
+   541→                aria-label={`Pakai warna ${c}`}
+   542→                title={c}
+   543→                className={`h-8 w-8 rounded-full border-2 transition-transform hover:scale-110 ${
+   544→                  headerColorValue.toLowerCase() === c ? 'border-foreground' : 'border-border'
+   545→                }`}
+   546→                style={{ backgroundColor: c }}
+   547→              />
+   548→            ))}
+   549→            <div className="ml-1 flex items-center gap-2">
+   550→              <input
+   551→                type="color"
+   552→                aria-label="Pilih warna kustom"
+   553→                value={headerColorValue || '#17408b'}
+   554→                onChange={(e) => setHeaderColorDraft(e.target.value)}
+   555→                className="h-8 w-10 cursor-pointer rounded border border-input bg-background p-0.5"
+   556→              />
+   557→              <Input
+   558→                value={headerColorValue}
+   559→                onChange={(e) => setHeaderColorDraft(e.target.value)}
+   560→                placeholder="#17408b"
+   561→                className="h-8 w-28 font-mono text-xs"
+   562→                aria-label="Kode hex warna header"
+   563→              />
+   564→              <Button
+   565→                size="sm"
+   566→                onClick={() => void saveHeaderColor(headerColorDraft ?? headerColorValue)}
+   567→                disabled={headerColorDraft === null || headerColorDraft === (data?.headerColor ?? '')}
+   568→                className="h-8 bg-[#17408b] text-white hover:bg-[#12326e]"
+   569→              >
+   570→                Terapkan
+   571→              </Button>
+   572→            </div>
+   573→          </div>
+   574→          {(data?.headerColor || headerColorDraft) && (
+   575→            <div className="mt-3 flex items-center gap-2">
+   576→              <Button
+   577→                variant="outline"
+   578→                size="sm"
+   579→                onClick={() => void saveHeaderColor('')}
+   580→                className="text-muted-foreground"
+   581→              >
+   582→                <RotateCcw className="h-4 w-4" aria-hidden="true" /> Kembalikan Gradien Bawaan
+   583→              </Button>
+   584→              <span className="text-[11px] text-muted-foreground">
+   585→                Aktif: <span className="font-mono font-semibold">{headerColorValue}</span>
+   586→              </span>
+   587→            </div>
+   588→          )}
+   589→        </section>
+   590→
+   591→        <section className="rounded-lg border bg-card p-4 shadow-sm sm:p-5">
+   592→          <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-foreground/80">
+   593→            Favicon
+   594→          </h3>
+   595→          <p className="mb-4 text-xs text-muted-foreground">
+   596→            Ikon pada tab browser. Disarankan persegi (32×32 atau lebih), maks 2 MB.
+   597→          </p>
+   598→          <div className="flex items-center gap-4">
+   599→            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-lg border bg-muted/30 p-2">
+   600→              {isLoading ? (
+   601→                <Skeleton className="h-10 w-10" />
+   602→              ) : data?.faviconUrl ? (
+   603→                <img src={data.faviconUrl} alt="Favicon" className="h-10 w-10 object-contain" />
+   604→              ) : (
+   605→                <div className="flex h-10 w-10 items-center justify-center rounded bg-muted text-[10px] text-muted-foreground">
+   606→                  n/a
+   607→                </div>
+   608→              )}
+   609→            </div>
+   610→            <div className="min-w-0 flex-1">
+   611→              <p className="text-xs font-semibold text-foreground">
+   612→                {data?.faviconUrl ? 'Favicon kustom aktif' : 'Menggunakan favicon bawaan'}
+   613→              </p>
+   614→              <div className="mt-2 flex flex-wrap gap-2">
+   615→                <input
+   616→                  ref={faviconInputRef}
+   617→                  type="file"
+   618→                  accept="image/*,.ico,.svg"
+   619→                  className="sr-only"
+   620→                  onChange={(e) => {
+   621→                    const file = e.target.files?.[0]
+   622→                    if (file) void uploadImage('favicon', file)
+   623→                  }}
+   624→                />
+   625→                <Button
+   626→                  variant="outline"
+   627→                  size="sm"
+   628→                  onClick={() => faviconInputRef.current?.click()}
+   629→                  disabled={uploading === 'favicon'}
+   630→                >
+   631→                  {uploading === 'favicon' ? (
+   632→                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+   633→                  ) : (
+   634→                    <Upload className="h-4 w-4" aria-hidden="true" />
+   635→                  )}
+   636→                  Unggah Favicon
+   637→                </Button>
+   638→                {data?.faviconUrl && (
+   639→                  <Button
+   640→                    variant="outline"
+   641→                    size="sm"
+   642→                    onClick={() => removeImage('favicon')}
+   643→                    className="text-destructive hover:text-destructive"
+   644→                  >
+   645→                    <Trash2 className="h-4 w-4" aria-hidden="true" /> Hapus
+   646→                  </Button>
+   647→                )}
+   648→              </div>
+   649→            </div>
+   650→          </div>
+   651→        </section>
+   652→      </div>
+   653→
+   654→      {/* Reset */}
+   655→      <section className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 sm:p-5">
+   656→        <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-foreground/80">
+   657→          Kembalikan Semua ke Bawaan
+   658→        </h3>
+   659→        <p className="mb-3 text-xs text-muted-foreground">
+   660→          Menghapus seluruh pengaturan kustom (teks, logo, dan favicon) dan mengembalikan
+   661→          nilai bawaan aplikasi.
+   662→        </p>
+   663→        <Button variant="destructive" size="sm" onClick={() => setResetOpen(true)}>
+   664→          <RotateCcw className="h-4 w-4" aria-hidden="true" /> Reset Semua Pengaturan
+   665→        </Button>
+   666→      </section>
+   667→
+   668→      <AlertDialog open={resetOpen} onOpenChange={setResetOpen}>
+   669→        <AlertDialogContent>
+   670→          <AlertDialogHeader>
+   671→            <AlertDialogTitle>Reset semua pengaturan?</AlertDialogTitle>
+   672→            <AlertDialogDescription>
+   673→              Seluruh kustomisasi (nama, judul, teks brand, footer, logo, dan favicon) akan
+   674→              dikembalikan ke nilai bawaan. Tindakan ini tidak dapat dibatalkan.
+   675→            </AlertDialogDescription>
+   676→          </AlertDialogHeader>
+   677→          <AlertDialogFooter>
+   678→            <AlertDialogCancel>Batal</AlertDialogCancel>
+   679→            <AlertDialogAction onClick={handleReset} className="bg-destructive text-white hover:bg-destructive/90">
+   680→              Ya, Reset
+   681→            </AlertDialogAction>
+   682→          </AlertDialogFooter>
+   683→        </AlertDialogContent>
+   684→      </AlertDialog>
+   685→    </div>
+   686→  )
+   687→}
+   688→

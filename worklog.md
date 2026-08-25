@@ -589,3 +589,29 @@ Stage Summary:
 - Kolom baru AdminUser.active dipakai lintas sistem: login ditolak utk akun nonaktif (403), sesi aktif dihapus saat nonaktifkan, getAdminUser menganggap logout
 - Proteksi keamanan: tidak bisa hapus/nonaktifkan/ubah peran akun sendiri, admin aktif terakhir tidak bisa dihapus/diturunkan/dinonaktifkan, password hanya ditampilkan sekali, role opd wajib tertaut OPD tanpa akun
 - 5 file baru (lib/users, 3 route API, section UI) + 5 file diubah (schema, auth, login, types, sidebar, page); backup pra-skema /tmp/backup-pre-usermgmt.db
+
+---
+Task ID: 26
+Agent: Z.ai Code (main)
+Task: "tambahkan fitur pada Pengaturan untuk API Key AI Copilot agar kompatibel di semua Provider" — konfigurasi provider LLM eksternal (API key, base URL, model) pada Pengaturan Aplikasi + klien generik OpenAI-Compatible
+
+Work Log:
+- Baca implementasi copilot (src/lib/copilot.ts context builder, /api/copilot memakai z-ai-web-dev-sdk), sistem pengaturan (AppSetting key-value, getSettings bentuk tetap, /api/admin/settings PUT, reset deleteMany semua, admin-settings-section.tsx), dan widget copilot
+- Strategi kompatibilitas: protokol OpenAI-Compatible (POST {baseUrl}/chat/completions + Authorization Bearer) via fetch murni — didukung hampir semua provider; Anthropic & Gemini memakai endpoint kompatibel OpenAI resminya
+- BARU src/lib/copilot-providers.ts (data murni, client-safe): COPILOT_PROVIDERS 11 entri (default Z.ai, OpenAI, Anthropic, Google Gemini, Groq, DeepSeek, OpenRouter, Mistral, Together, Ollama lokal, Kustom) dengan baseUrl default + placeholder model + requiresKey + hint; findCopilotProvider(); maskApiKey() (12 titik + 4 karakter terakhir)
+- BARU src/lib/copilot-config.ts (server): COPILOT_SETTING_KEYS (copilotProvider/ApiKey/BaseUrl/Model di app_setting); getCopilotConfig() (plain, khusus server), getCopilotPublicInfo() (key SELALU dimasker), effectiveBaseUrl(), clearCopilotSettings(); CopilotLlmError (pesan Indonesia siap tampil); callOpenAiCompatible() — fetch + AbortController timeout 60s (25s utk test), header khusus OpenRouter (HTTP-Referer/X-Title), pemetaan error 401/403→"API Key tidak valid", 404→"Model/Base URL tidak ditemukan", 429→rate limit, 5xx; callCopilotLml(cfg, systemPrompt, history) — provider default→z-ai-web-dev-sdk (perilaku lama), lainnya→endpoint OpenAI-Compatible dengan role system; testCopilotConnection() (pesan mini "Balas OK", kembalikan engine+reply+latency)
+- BARU /api/admin/settings/copilot (GET/PUT/DELETE, requireAdmin): GET info ter-masker; PUT validasi provider/baseUrl http(s)/model wajib 1-120/key 8-500 tanpa spasi — provider default membersihkan key+baseUrl+model, key/model kosong mempertahankan nilai tersimpan; DELETE kembali ke bawaan; BARU /api/admin/settings/copilot/test (POST) — menerima override draf utk menguji SEBELUM simpan, fallback nilai tersimpan, CopilotLlmError→400
+- /api/copilot: panggil callCopilotLll sesuai konfigurasi; CopilotLlmError→502 dengan pesan jelas (mis. "API Key tidak valid atau tidak diizinkan provider"); anonim/OPD tetap 401
+- /api/admin/settings/reset: deleteMany kini mempertahankan 4 key copilot (admin tak perlu memasukkan ulang kredensial integrasi); teks UI reset diperbarui
+- src/types/budget.ts: CopilotSettingsDto (provider/providerLabel/baseUrl/model/hasApiKey/apiKeyMasked/requiresKey)
+- admin-settings-section.tsx: seksi baru "AI Copilot — Provider LLM" (badge provider aktif, grid: Select provider 11 opsi + Model + API Key password dgn toggle mata & placeholder masker + Base URL, praisi otomatis saat ganti provider, disabled saat bawaan); tombol Uji Koneksi (kotak hasil hijau/merah + latensi), Simpan Konfigurasi, Kembalikan ke Bawaan (AlertDialog, hanya bila provider tersimpan ≠ default); draf ter-reset lokal setelah clear (bug ditemukan saat verifikasi & diperbaiki)
+- Keamanan: key tidak pernah dikirim utuh ke klien (GET/PUT respons hanya masker), /api/settings publik bebas key (terverifikasi), endpoint admin-only
+- Verifikasi curl (admin/admin123): anonim 401; GET default; provider invalid/key kosong/model kosong/baseUrl ftp → 400; simpan openai+key fake → 200 masker "••••7654"; key kosong+model baru → key dipertahankan; uji koneksi openai fake key → BENAR-BENAR menghubungi api.openai.com dan menampilkan pesan provider ("Country, region, or territory not supported" — bukti klien end-to-end bekerja); uji ollama localhost → pesan jaringan Indonesia; chat copilot dgn key fake → 502 pesan jelas; DELETE → default; chat copilot bawaan kembali normal (jawaban data nyata Rp529.174.732.915 / 54,34%)
+- Verifikasi agent-browser: seksi tampil setelah FAVICON; uji koneksi bawaan sukses ("Z.ai (bawaan) dalam 245 ms — balasan OK"); dropdown 11 provider; pilih OpenAI → model+baseUrl terisi otomatis; key fake → kotak merah pesan jelas; simpan → placeholder "••••3456 — tersimpan"; alur Groq simpan→kembalikan→draft ter-reset (Bawaan/model kosong/tombol hilang); chat widget copilot sukses jawab data nyata; mobile 390px tanpa overflow; 0 error konsol (1 warning pre-existing DialogContent); dev.log semua 200; lint & tsc bersih
+- State akhir DB: app_setting tanpa baris copilot (kembali bawaan persis kondisi awal)
+
+Stage Summary:
+- Pengaturan → "AI Copilot — Provider LLM": admin dapat menghubungkan Copilot ke provider mana pun (11 pilihan + kustom) via API key, base URL, dan model — disimpan di app_setting, key selalu dimasker di respons API
+- Klien LLM generik OpenAI-Compatible berbasis fetch (tanpa paket baru) dengan pemetaan error Indonesia + timeout; tanpa konfigurasi tetap memakai mesin bawaan Z.ai (fallback, perilaku lama terjaga)
+- Tombol Uji Koneksi memakai nilai draf (bisa sebelum simpan); reset pengaturan tampilan tidak menghapus konfigurasi copilot
+- 4 file baru (providers, config, 2 route API) + 4 file diubah (copilot route, reset route, types, settings section); tanpa perubahan skema DB

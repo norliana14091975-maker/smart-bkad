@@ -3,14 +3,21 @@ import { db } from '@/lib/db'
 import { requireAdmin, unauthorized } from '@/lib/auth'
 import { removeUploadedImage } from '@/lib/image-upload'
 import { DEFAULT_SETTINGS } from '@/lib/default-settings'
+import { COPILOT_SETTING_KEYS } from '@/lib/copilot-config'
 
-/** Kembalikan seluruh pengaturan ke nilai bawaan (termasuk logo & favicon). */
+/**
+ * Kembalikan pengaturan tampilan ke nilai bawaan (teks, logo, favicon).
+ * Konfigurasi AI Copilot (provider, model, API key) DIPERTAHANKAN agar
+ * admin tidak perlu memasukkan ulang kredensial integrasi.
+ */
 export async function POST() {
   try {
     const user = await requireAdmin()
     if (!user) return unauthorized()
 
-    await db.appSetting.deleteMany({})
+    await db.appSetting.deleteMany({
+      where: { key: { notIn: [...COPILOT_SETTING_KEYS] } },
+    })
     removeUploadedImage('app-logo')
     removeUploadedImage('app-sidebar-logo')
     removeUploadedImage('app-emblem')

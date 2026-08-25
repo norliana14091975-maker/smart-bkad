@@ -1,8 +1,8 @@
 'use client'
 
-import { useRef, useState } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
-import { Loader2, RotateCcw, Save, Trash2, Upload } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Bot, Eye, EyeOff, Loader2, PlugZap, RotateCcw, Save, Trash2, Upload } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { useSettings } from '@/hooks/use-settings'
 import { Button } from '@/components/ui/button'
@@ -18,11 +18,19 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { DkiEmblem, GoldEmblem } from '@/components/dashboard/emblem'
+import { COPILOT_PROVIDERS, findCopilotProvider } from '@/lib/copilot-providers'
 import { DEFAULT_SETTINGS } from '@/lib/default-settings'
-import type { AppSettingsDto } from '@/types/budget'
+import type { AppSettingsDto, CopilotSettingsDto } from '@/types/budget'
 
 type TextKey =
   | 'appName'
@@ -123,6 +131,132 @@ export function AdminSettingsSection() {
   // Draf warna header (hex); null = belum diubah (ikut data server)
   const [headerColorDraft, setHeaderColorDraft] = useState<string | null>(null)
   const headerColorValue = headerColorDraft ?? (data?.headerColor ?? '')
+
+  // ---- AI Copilot: konfigurasi provider LLM ----
+  const copilotQuery = useQuery({
+    queryKey: ['copilot-settings'],
+    queryFn: async (): Promise<CopilotSettingsDto> => {
+      const res = await fetch('/api/admin/settings/copilot')
+      if (!res.ok) throw new Error('Gagal memuat konfigurasi AI Copilot')
+      const json = (await res.json()) as { data: CopilotSettingsDto }
+      return json.data
+    },
+    staleTime: 30_000,
+    retry: 1,
+  })
+  const [cpHydrated, setCpHydrated] = useState(false)
+  const [cpProvider, setCpProvider] = useState('default')
+  const [cpModel, setCpModel] = useState('')
+  const [cpBase, setCpBase] = useState('')
+  const [cpKey, setCpKey] = useState('')
+  const [showKey, setShowKey] = useState(false)
+  const [cpSaving, setCpSaving] = useState(false)
+  const [cpTesting, setCpTesting] = useState(false)
+  const [cpTest, setCpTest] = useState<{ ok: boolean; message: string } | null>(null)
+  const [cpClearOpen, setCpClearOpen] = useState(false)
+
+  // Isi draf dari data server saat pertama dimuat
+  useEffect(() => {
+    if (copilotQuery.data && !cpHydrated) {
+      setCpProvider(copilotQuery.data.provider)
+      setCpModel(copilotQuery.data.model ?? '')
+      setCpBase(copilotQuery.data.baseUrl ?? '')
+      setCpHydrated(true)
+    }
+  }, [copilotQuery.data, cpHydrated])
+
+  const cpProviderDef = findCopilotProvider(cpProvider) ?? COPILOT_PROVIDERS[0]
+  const cpIsDefault = cpProviderDef.id === 'default'
+  const cpKeyPlaceholder = copilotQuery.data?.hasApiKey
+    ? `${copilotQuery.data.apiKeyMasked} — tersimpan (biarkan kosong untuk memakainya)`
+    : cpProviderDef.keyHint || 'API Key'
+
+  /** Ganti provider: praisi Base URL & contoh model dari registry. */
+  function selectCpProvider(id: string) {
+    setCpProvider(id)
+    const p = findCopilotProvider(id)
+    setCpBase(p?.baseUrl ?? '')
+    setCpModel(p?.modelPlaceholder ?? '')
+    setCpKey('')
+    setCpTest(null)
+  }
+
+  async function saveCopilot() {
+    setCpSaving(true)
+    try {
+      const res = await fetch('/api/admin/settings/copilot', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: cpProvider,
+          ...(cpIsDefault
+            ? {}
+            : { baseUrl: cpBase, model: cpModel, ...(cpKey.trim() ? { apiKey: cpKey.trim() } : {}) }),
+        }),
+      })
+      const json = (await res.json()) as { data?: CopilotSettingsDto; error?: string }
+      if (!res.ok || !json.data) throw new Error(json.error ?? 'Gagal menyimpan')
+      toast({ title: 'Konfigurasi AI Copilot tersimpan' })
+      setCpKey('')
+      setCpTest(null)
+      await queryClient.invalidateQueries({ queryKey: ['copilot-settings'] })
+    } catch (err) {
+      toast({ title: 'Gagal menyimpan konfigurasi', description: String(err), variant: 'destructive' })
+    } finally {
+      setCpSaving(false)
+    }
+  }
+
+  /** Uji koneksi memakai nilai draf (key kosong → pakai key tersimpan). */
+  async function testCopilot() {
+    setCpTesting(true)
+    setCpTest(null)
+    try {
+      const res = await fetch('/api/admin/settings/copilot/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: cpProvider,
+          ...(cpIsDefault
+            ? {}
+            : { baseUrl: cpBase, model: cpModel, ...(cpKey.trim() ? { apiKey: cpKey.trim() } : {}) }),
+        }),
+      })
+      const json = (await res.json()) as {
+        data?: { engine: string; reply: string; latencyMs: number }
+        error?: string
+      }
+      if (!res.ok || !json.data) throw new Error(json.error ?? 'Gagal menguji koneksi')
+      setCpTest({
+        ok: true,
+        message: `Berhasil terhubung ke ${json.data.engine} dalam ${json.data.latencyMs} ms — balasan: "${json.data.reply.slice(0, 80)}"`,
+      })
+    } catch (err) {
+      setCpTest({ ok: false, message: String(err) })
+    } finally {
+      setCpTesting(false)
+    }
+  }
+
+  async function clearCopilot() {
+    setCpClearOpen(false)
+    try {
+      const res = await fetch('/api/admin/settings/copilot', { method: 'DELETE' })
+      const json = (await res.json()) as { data?: CopilotSettingsDto; error?: string }
+      if (!res.ok || !json.data) throw new Error(json.error ?? 'Gagal menghapus')
+      toast({ title: 'AI Copilot kembali ke mesin bawaan (Z.ai)' })
+      // reset draf lokal agar form langsung mencerminkan kondisi bawaan
+      setCpKey('')
+      setCpTest(null)
+      setCpProvider('default')
+      setCpModel('')
+      setCpBase('')
+      await queryClient.invalidateQueries({ queryKey: ['copilot-settings'] })
+    } catch (err) {
+      toast({ title: 'Gagal menghapus konfigurasi', description: String(err), variant: 'destructive' })
+    }
+  }
+
 
   // Simpan warna header lewat endpoint yang sama dengan teks
   async function saveHeaderColor(value: string) {
@@ -651,14 +785,210 @@ export function AdminSettingsSection() {
         </section>
       </div>
 
+      {/* AI Copilot — Provider LLM */}
+      <section className="mb-5 rounded-lg border bg-card p-4 shadow-sm sm:p-5">
+        <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-bold uppercase tracking-wide text-foreground/80">
+            AI Copilot — Provider LLM
+          </h3>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-[#17408b]/20 bg-[#17408b]/5 px-2.5 py-0.5 text-[11px] font-semibold text-[#17408b]">
+            <Bot className="h-3 w-3" aria-hidden="true" />
+            {copilotQuery.data?.providerLabel ?? 'Bawaan (Z.ai)'}
+          </span>
+        </div>
+        <p className="mb-4 text-xs text-muted-foreground">
+          Hubungkan AI Copilot dengan penyedia LLM pilihan Anda — semua provider populer
+          didukung melalui protokol OpenAI-Compatible. Tanpa konfigurasi, Copilot memakai
+          mesin bawaan (Z.ai).
+        </p>
+
+        {copilotQuery.isLoading ? (
+          <Skeleton className="h-32 w-full" />
+        ) : (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {/* Provider */}
+            <div className="space-y-1.5">
+              <Label>Provider</Label>
+              <Select value={cpProvider} onValueChange={selectCpProvider}>
+                <SelectTrigger aria-label="Pilih provider LLM">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {COPILOT_PROVIDERS.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">{cpProviderDef.hint}</p>
+            </div>
+
+            {/* Model */}
+            <div className="space-y-1.5">
+              <Label htmlFor="cp-model">Model</Label>
+              <Input
+                id="cp-model"
+                value={cpModel}
+                onChange={(e) => setCpModel(e.target.value)}
+                placeholder={cpProviderDef.modelPlaceholder ?? 'mis. gpt-4o-mini'}
+                disabled={cpIsDefault}
+                maxLength={120}
+                autoComplete="off"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                {cpIsDefault
+                  ? 'Mesin bawaan memilih model otomatis.'
+                  : 'Nama model persis seperti tercantum di dokumentasi provider.'}
+              </p>
+            </div>
+
+            {/* API Key */}
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label htmlFor="cp-key">API Key</Label>
+              <div className="relative">
+                <Input
+                  id="cp-key"
+                  type={showKey ? 'text' : 'password'}
+                  value={cpKey}
+                  onChange={(e) => setCpKey(e.target.value)}
+                  placeholder={cpKeyPlaceholder}
+                  disabled={cpIsDefault}
+                  maxLength={500}
+                  autoComplete="new-password"
+                  className="pr-10 font-mono text-xs"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowKey((v) => !v)}
+                  aria-label={showKey ? 'Sembunyikan API key' : 'Tampilkan API key'}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:text-foreground"
+                >
+                  {showKey ? (
+                    <EyeOff className="h-4 w-4" aria-hidden="true" />
+                  ) : (
+                    <Eye className="h-4 w-4" aria-hidden="true" />
+                  )}
+                </button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                {cpIsDefault
+                  ? 'Mesin bawaan tidak memerlukan API key.'
+                  : copilotQuery.data?.hasApiKey
+                    ? 'Key tersimpan aman — biarkan kosong bila tidak ingin mengganti.'
+                    : `${cpProviderDef.requiresKey ? 'Wajib diisi. ' : 'Opsional. '}${cpProviderDef.keyHint}. Disimpan di database server aplikasi.`}
+              </p>
+            </div>
+
+            {/* Base URL */}
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label htmlFor="cp-base">Base URL</Label>
+              <Input
+                id="cp-base"
+                value={cpBase}
+                onChange={(e) => setCpBase(e.target.value)}
+                placeholder={cpProviderDef.baseUrl || 'https://provider-anda.example/v1'}
+                disabled={cpIsDefault}
+                maxLength={300}
+                autoComplete="off"
+                className="font-mono text-xs"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Endpoint OpenAI-Compatible (…/chat/completions ditambahkan otomatis).
+                Biarkan sesuai default provider kecuali Anda memakai proxy/kustom.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Aksi */}
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={testCopilot}
+            disabled={cpTesting || copilotQuery.isLoading || (!cpIsDefault && !cpModel.trim())}
+          >
+            {cpTesting ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Menguji…
+              </>
+            ) : (
+              <>
+                <PlugZap className="h-4 w-4" aria-hidden="true" /> Uji Koneksi
+              </>
+            )}
+          </Button>
+          <Button
+            onClick={saveCopilot}
+            disabled={cpSaving || copilotQuery.isLoading || (!cpIsDefault && !cpModel.trim())}
+            size="sm"
+            className="bg-[#17408b] text-white hover:bg-[#12326e]"
+          >
+            {cpSaving ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Menyimpan…
+              </>
+            ) : (
+              <>
+                <Save className="h-4 w-4" aria-hidden="true" /> Simpan Konfigurasi
+              </>
+            )}
+          </Button>
+          {copilotQuery.data?.provider !== 'default' && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCpClearOpen(true)}
+              className="text-destructive hover:text-destructive"
+            >
+              <Trash2 className="h-4 w-4" aria-hidden="true" /> Kembalikan ke Bawaan
+            </Button>
+          )}
+        </div>
+
+        {/* Hasil uji koneksi */}
+        {cpTest && (
+          <p
+            role="status"
+            className={`mt-3 rounded-md border p-3 text-xs ${
+              cpTest.ok
+                ? 'border-green-300 bg-green-50 text-green-800'
+                : 'border-red-300 bg-red-50 text-red-700'
+            }`}
+          >
+            {cpTest.message}
+          </p>
+        )}
+
+        <AlertDialog open={cpClearOpen} onOpenChange={setCpClearOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Kembalikan AI Copilot ke mesin bawaan?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Konfigurasi provider, model, dan API key akan dihapus. Copilot kembali
+                memakai mesin bawaan Z.ai.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Batal</AlertDialogCancel>
+              <AlertDialogAction onClick={clearCopilot} className="bg-destructive text-white hover:bg-destructive/90">
+                Ya, Kembalikan
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </section>
+
       {/* Reset */}
       <section className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 sm:p-5">
         <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-foreground/80">
           Kembalikan Semua ke Bawaan
         </h3>
         <p className="mb-3 text-xs text-muted-foreground">
-          Menghapus seluruh pengaturan kustom (teks, logo, dan favicon) dan mengembalikan
-          nilai bawaan aplikasi.
+          Menghapus seluruh pengaturan tampilan kustom (teks, logo, dan favicon) dan
+          mengembalikan nilai bawaan aplikasi. Konfigurasi AI Copilot (provider &amp; API key)
+          tidak ikut ter-reset.
         </p>
         <Button variant="destructive" size="sm" onClick={() => setResetOpen(true)}>
           <RotateCcw className="h-4 w-4" aria-hidden="true" /> Reset Semua Pengaturan
@@ -670,8 +1000,9 @@ export function AdminSettingsSection() {
           <AlertDialogHeader>
             <AlertDialogTitle>Reset semua pengaturan?</AlertDialogTitle>
             <AlertDialogDescription>
-              Seluruh kustomisasi (nama, judul, teks brand, footer, logo, dan favicon) akan
-              dikembalikan ke nilai bawaan. Tindakan ini tidak dapat dibatalkan.
+              Seluruh kustomisasi tampilan (nama, judul, teks brand, footer, logo, dan favicon)
+              akan dikembalikan ke nilai bawaan. Konfigurasi AI Copilot dipertahankan.
+              Tindakan ini tidak dapat dibatalkan.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

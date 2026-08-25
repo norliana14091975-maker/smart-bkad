@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireExecutive, unauthorized } from '@/lib/auth'
 import { buildCopilotContext, copilotSystemPrompt } from '@/lib/copilot'
+import { CopilotLlmError, callCopilotLlm, getCopilotConfig } from '@/lib/copilot-config'
 
 export const runtime = 'nodejs'
 
@@ -17,7 +18,9 @@ interface ChatMessage {
  * POST /api/copilot — AI Copilot keuangan daerah.
  * Body: { messages: [{ role: 'user' | 'assistant', content: string }] }
  * (riwayat percakapan dikirim klien; server membangun prompt sistem berisi
- * konteks data keuangan terkini lalu memanggil LLM via z-ai-web-dev-sdk).
+ * konteks data keuangan terkini lalu memanggil LLM sesuai konfigurasi
+ * Pengaturan → AI Copilot: mesin bawaan Z.ai, atau provider eksternal
+ * apa pun yang kompatibel OpenAI dengan API key admin).
  * Hanya untuk admin penuh & Kepala Daerah.
  */
 export async function POST(req: Request) {
@@ -63,29 +66,17 @@ export async function POST(req: Request) {
     const context = await buildCopilotContext()
     const systemPrompt = copilotSystemPrompt(context, user.role)
 
-    // Panggil LLM (z-ai-web-dev-sdk — hanya di sisi server)
-    const { default: ZAI } = await import('z-ai-web-dev-sdk')
-    const zai = await ZAI.create()
-    const completion = await zai.chat.completions.create({
-      messages: [
-        { role: 'assistant', content: systemPrompt },
-        ...history.map((m) => ({ role: m.role, content: m.content })),
-      ],
-      thinking: { type: 'disabled' },
-    })
-
-    const reply = completion.choices[0]?.message?.content?.trim()
-    if (!reply) {
-      return NextResponse.json(
-        { error: 'Copilot tidak mengembalikan jawaban. Silakan coba lagi.' },
-        { status: 502 },
-      )
-    }
+    // Panggil LLM sesuai konfigurasi (bawaan Z.ai / provider eksternal)
+    const cfg = await getCopilotConfig()
+    const reply = await callCopilotLlm(cfg, systemPrompt, history)
 
     return NextResponse.json({
       data: { reply, hasContext: context !== null },
     })
   } catch (error) {
+    if (error instanceof CopilotLlmError) {
+      return NextResponse.json({ error: error.message }, { status: 502 })
+    }
     console.error('POST /api/copilot error', error)
     return NextResponse.json(
       { error: 'Copilot sedang tidak tersedia. Silakan coba beberapa saat lagi.' },
