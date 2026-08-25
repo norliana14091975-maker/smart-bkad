@@ -259,3 +259,17 @@ Work Log:
 
 Stage Summary:
 - Detail realisasi per-SKPD kini menampilkan desimal ,00 (konsisten di semua tampilan rincian); realisasi per-akun publik = agregasi seluruh OPD menjadi satu (terverifikasi dgn 2 OPD asli) dgn banner transparan asal data; PERLU TINDAKAN USER: upload ulang LRA DINAS KESEHATAN (233 baris tertimpa data uji — tidak dapat dipulihkan otomatis)
+
+---
+Task ID: 12
+Agent: Z.ai Code (main)
+Task: Perbaiki Runtime ReferenceError "formatRupiah is not defined" pada admin-realisasi-section
+
+Work Log:
+- Akar masalah: patch desimal sebelumnya mengubah template {formatRupiah0(...)} → {formatRupiah(...)} pada tabel Per-Akun admin, tetapi baris import masih hanya { formatPct, formatRupiah0 } — formatRupiah tidak diimpor
+- Perbaikan: import diperluas menjadi { formatPct, formatRupiah, formatRupiah0 } (formatRupiah0 tetap diperlukan untuk tabel Per-SKPD yang memakai format bulat)
+- Audit menyeluruh semua section (regex pemakaian vs import @/lib/format): tidak ada mismatch lain (skpd-detail-dialog & import-lra-panel sudah benar; pendapatan-section punya 2 import valid terpisah)
+- Verifikasi: lint bersih; browser: halaman Admin → Data Realisasi → tab Per-Akun merender 134 sel berdesimal (contoh 49.898.218.773.411,00) TANPA error; tab Per-SKPD normal; reload bersih; tanpa error console
+
+Stage Summary:
+- ReferenceError formatRupiah diperbaiki dengan menambahkan import; semua tampilan realisasi kini konsisten menampilkan desimal ,00 tanpa runtime error

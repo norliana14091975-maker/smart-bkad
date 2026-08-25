@@ -39,7 +39,7 @@ import { Badge } from '@/components/ui/badge'
 import { levelBadge } from '@/lib/kode-akun'
 import { useLevelFilter } from '@/hooks/use-level-filter'
 import { LevelFilterControls } from '@/components/dashboard/level-filter-controls'
-import { formatPct, formatRupiah0 } from '@/lib/format'
+import { formatPct, formatRupiah, formatRupiah0 } from '@/lib/format'
 import type { RealisasiAkunRowDto, RealisasiSkpdRowDto } from '@/types/budget'
 
 async function fetchAkun(): Promise<RealisasiAkunRowDto[]> {
