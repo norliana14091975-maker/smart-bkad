@@ -27,7 +27,7 @@ import {
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
-import { DkiEmblem, GoldEmblem } from '@/components/dashboard/emblem'
+import { DaerahEmblem, GoldEmblem } from '@/components/dashboard/emblem'
 import { useSetupWizardStatus } from '@/components/dashboard/setup-wizard'
 import { COPILOT_PROVIDERS, findCopilotProvider } from '@/lib/copilot-providers'
 import { formatDateID } from '@/lib/format'
@@ -73,7 +73,7 @@ const TEXT_FIELDS: {
   {
     key: 'appTitle',
     label: 'Judul Halaman',
-    placeholder: 'Dashboard Keuangan DKI',
+    placeholder: 'Dashboard Keuangan Kab. Seruyan',
     max: 100,
     hint: 'Tampil pada tab/judul browser.',
   },
@@ -95,14 +95,14 @@ const TEXT_FIELDS: {
   {
     key: 'brandText',
     label: 'Teks Brand Header',
-    placeholder: 'BPKD',
+    placeholder: 'PEMDA',
     max: 30,
     hint: 'Teks utama di pita biru bagian atas.',
   },
   {
     key: 'brandSubtext',
     label: 'Sub-teks Brand Header',
-    placeholder: 'Provinsi DKI Jakarta',
+    placeholder: 'Kabupaten Seruyan',
     max: 60,
   },
   {
@@ -528,7 +528,7 @@ export function AdminSettingsSection({ onOpenWizard }: AdminSettingsSectionProps
               ) : data?.logoUrl ? (
                 <img src={data.logoUrl} alt="Logo aplikasi" className="h-16 w-16 object-contain" />
               ) : (
-                <DkiEmblem className="h-14 w-14" />
+                <DaerahEmblem className="h-14 w-14" />
               )}
             </div>
             <div className="min-w-0 flex-1">
@@ -593,7 +593,7 @@ export function AdminSettingsSection({ onOpenWizard }: AdminSettingsSectionProps
                   className="h-14 w-14 rounded object-contain"
                 />
               ) : (
-                <DkiEmblem className="h-12 w-12" />
+                <DaerahEmblem className="h-12 w-12" />
               )}
             </div>
             <div className="min-w-0 flex-1">

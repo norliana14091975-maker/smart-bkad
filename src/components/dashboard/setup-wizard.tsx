@@ -14,7 +14,6 @@ import {
   Loader2,
   PlugZap,
   Save,
-  ShieldAlert,
   ShieldCheck,
   Wand2,
 } from 'lucide-react'
@@ -56,8 +55,8 @@ const STEPS = [
   { id: 'finish', label: 'Selesai', icon: Flag },
 ] as const
 
-/** Kolom identitas yang dapat diubah lewat wizard (subset Pengaturan Aplikasi). */
-const IDENTITY_FIELDS = [
+/** Kolom identitas yang dapat diubah lewat wizard (dipakai bersama wizard first-run). */
+export const IDENTITY_FIELDS = [
   {
     key: 'appTitle' as const,
     label: 'Judul Dashboard',
@@ -513,22 +512,12 @@ export function SetupWizard({ open, onOpenChange }: SetupWizardProps) {
                 <ul className="space-y-2" aria-label="Status konfigurasi saat ini">
                   <StatusRow
                     icon={checks?.identityConfigured ? <CheckCircle2 className="h-5 w-5" /> : <Building2 className="h-5 w-5" />}
-                    tone={checks?.identityConfigured ? 'ok' : 'muted'}
+                    tone={checks?.identityConfigured ? 'ok' : 'warn'}
                     label="Identitas Dashboard"
                     desc={
                       checks?.identityConfigured
-                        ? `Judul & nama pemda sudah dikustomisasi: “${settingsQuery.data?.appTitle ?? '—'}”`
-                        : 'Masih memakai nilai bawaan — akan diatur pada langkah berikutnya.'
-                    }
-                  />
-                  <StatusRow
-                    icon={checks?.passwordDefault ? <ShieldAlert className="h-5 w-5" /> : <ShieldCheck className="h-5 w-5" />}
-                    tone={checks?.passwordDefault ? 'warn' : 'ok'}
-                    label="Keamanan Akun Admin"
-                    desc={
-                      checks?.passwordDefault
-                        ? `Akun ${status?.username ?? 'admin'} masih memakai password bawaan (admin123) — sangat disarankan diganti.`
-                        : `Password akun ${status?.username ?? 'admin'} sudah diganti dari bawaan.`
+                        ? `Judul & nama pemda siap dipakai: “${settingsQuery.data?.appTitle ?? '—'}”`
+                        : 'Terdeteksi sisa identitas lama DKI Jakarta — silakan perbarui pada langkah berikutnya.'
                     }
                   />
                   <StatusRow
@@ -608,23 +597,14 @@ export function SetupWizard({ open, onOpenChange }: SetupWizardProps) {
             <div>
               <h3 className="text-sm font-bold text-foreground">Keamanan Akun Admin</h3>
               <p className="mb-4 mt-0.5 text-xs text-muted-foreground">
-                Password bawaan bersifat publik dan tidak aman untuk penggunaan nyata.
-                Ganti password akun <span className="font-semibold">{status?.username ?? 'admin'}</span> sekarang,
-                atau kosongkan semua kolom untuk melanjutkan tanpa mengganti.
+                Ganti password akun <span className="font-semibold">{status?.username ?? 'admin'}</span> bila
+                diperlukan, atau kosongkan semua kolom untuk melanjutkan tanpa mengganti.
               </p>
 
-              {checks?.passwordDefault ? (
-                <p role="alert" className="mb-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800">
-                  <ShieldAlert className="mr-1 inline h-4 w-4 align-text-bottom" aria-hidden="true" />
-                  Akun ini masih memakai password bawaan <span className="font-mono font-bold">admin123</span> —
-                  sangat disarankan diganti sekarang.
-                </p>
-              ) : (
-                <p className="mb-4 rounded-md border border-emerald-300 bg-emerald-50 p-3 text-xs text-emerald-800">
-                  <ShieldCheck className="mr-1 inline h-4 w-4 align-text-bottom" aria-hidden="true" />
-                  Password akun ini sudah diganti dari bawaan. Anda tetap dapat menggantinya lagi bila perlu.
-                </p>
-              )}
+              <p className="mb-4 rounded-md border border-[#17408b]/20 bg-[#17408b]/5 p-3 text-xs text-[#17408b]">
+                <ShieldCheck className="mr-1 inline h-4 w-4 align-text-bottom" aria-hidden="true" />
+                Gunakan password yang kuat (minimal 8 karakter) dan rahasiakan kredensial akun admin.
+              </p>
 
               {pwDone && (
                 <p role="status" className="mb-4 rounded-md border border-emerald-300 bg-emerald-50 p-3 text-xs text-emerald-800">
@@ -873,17 +853,7 @@ export function SetupWizard({ open, onOpenChange }: SetupWizardProps) {
                     desc={
                       checks?.identityConfigured
                         ? `${settingsQuery.data?.appTitle ?? '—'} · ${settingsQuery.data?.govName ?? '—'}`
-                        : 'Masih nilai bawaan — ubah lewat Pengaturan Aplikasi.'
-                    }
-                  />
-                  <StatusRow
-                    icon={checks?.passwordDefault ? <ShieldAlert className="h-5 w-5" /> : <ShieldCheck className="h-5 w-5" />}
-                    tone={checks?.passwordDefault ? 'warn' : 'ok'}
-                    label="Keamanan Akun Admin"
-                    desc={
-                      checks?.passwordDefault
-                        ? 'Masih memakai password bawaan admin123 — segera ganti lewat langkah Keamanan.'
-                        : `Password akun ${status?.username ?? 'admin'} sudah diganti dari bawaan.`
+                        : 'Terdeteksi sisa identitas lama DKI Jakarta — ubah lewat Pengaturan Aplikasi.'
                     }
                   />
                   <StatusRow
@@ -948,8 +918,9 @@ export function SetupWizard({ open, onOpenChange }: SetupWizardProps) {
   )
 }
 
-/** Baris status dengan ikon + label + deskripsi (dipakai langkah Pengantar & Selesai). */
-function StatusRow({
+/** Baris status dengan ikon + label + deskripsi (dipakai langkah Pengantar & Selesai,
+ *  serta wizard first-run). */
+export function StatusRow({
   icon,
   tone,
   label,

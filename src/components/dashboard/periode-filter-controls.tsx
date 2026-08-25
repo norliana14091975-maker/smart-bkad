@@ -5,7 +5,7 @@ import { CalendarRange } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { periodePilihan } from '@/lib/periode'
 
-const STORAGE_KEY = 'bpkd.periodeFilter'
+const STORAGE_KEY = 'seruyan.periodeFilter'
 
 // ---------------------------------------------------------------------------
 // Store global filter periode LRA (kumulatif s.d. bulan ke-N) — dibagi semua

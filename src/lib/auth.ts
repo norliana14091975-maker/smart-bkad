@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
 // Nama cookie sesi admin (httpOnly)
-export const SESSION_COOKIE = 'bpkd_admin_session'
+export const SESSION_COOKIE = 'dashboard_admin_session'
 
 // Masa berlaku sesi: 7 hari
 export const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000

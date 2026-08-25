@@ -3,7 +3,7 @@
 import { useSyncExternalStore } from 'react'
 import { LEVEL_LABELS } from '@/lib/kode-akun'
 
-const STORAGE_KEY = 'bpkd.levelFilter'
+const STORAGE_KEY = 'seruyan.levelFilter'
 const ALL_LEVELS = [1, 2, 3, 4, 5, 6] as const
 
 export type LevelFilter = number[] // [] berarti semua level tampil

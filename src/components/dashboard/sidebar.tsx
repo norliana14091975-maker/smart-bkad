@@ -17,7 +17,7 @@ import {
   Table2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { DkiEmblem } from '@/components/dashboard/emblem'
+import { DaerahEmblem } from '@/components/dashboard/emblem'
 import type { AppSettingsDto, AuthUserDto } from '@/types/budget'
 
 export type SectionId =
@@ -217,7 +217,7 @@ export function SidebarNav({ active, onSelect, className, user, onLoginClick, on
             className="h-9 w-9 shrink-0 rounded object-contain"
           />
         ) : (
-          <DkiEmblem className="h-9 w-9 shrink-0" />
+          <DaerahEmblem className="h-9 w-9 shrink-0" />
         )}
         <span className="text-base font-semibold tracking-[0.3em] text-white" aria-label={settings.appName}>
           {settings.appName}

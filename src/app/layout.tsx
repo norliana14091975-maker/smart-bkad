@@ -31,8 +31,8 @@ export async function generateMetadata(): Promise<Metadata> {
     keywords: [
       "Dashboard Keuangan",
       "APBD",
-      "DKI Jakarta",
-      "BPKD",
+      "Kabupaten Seruyan",
+      "PEMDA",
       "Anggaran Daerah",
     ],
     ...(settings.faviconUrl ? { icons: { icon: settings.faviconUrl } } : {}),

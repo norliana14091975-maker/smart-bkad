@@ -1,0 +1,991 @@
+     1→     1→'use client'
+     2→     2→
+     3→     3→import { useEffect, useState } from 'react'
+     4→     4→import { useQuery, useQueryClient } from '@tanstack/react-query'
+     5→     5→import {
+     6→     6→  ArrowLeft,
+     7→     7→  Bot,
+     8→     8→  Building2,
+     9→     9→  Check,
+    10→    10→  CheckCircle2,
+    11→    11→  Eye,
+    12→    12→  EyeOff,
+    13→    13→  Flag,
+    14→    14→  Loader2,
+    15→    15→  PlugZap,
+    16→    16→  Save,
+    17→    17→  ShieldAlert,
+    18→    18→  ShieldCheck,
+    19→    19→  Wand2,
+    20→    20→} from 'lucide-react'
+    21→    21→import { useToast } from '@/hooks/use-toast'
+    22→    22→import { useSettings } from '@/hooks/use-settings'
+    23→    23→import { Button } from '@/components/ui/button'
+    24→    24→import {
+    25→    25→  Dialog,
+    26→    26→  DialogContent,
+    27→    27→  DialogDescription,
+    28→    28→  DialogTitle,
+    29→    29→} from '@/components/ui/dialog'
+    30→    30→import { Input } from '@/components/ui/input'
+    31→    31→import { Label } from '@/components/ui/label'
+    32→    32→import {
+    33→    33→  Select,
+    34→    34→  SelectContent,
+    35→    35→  SelectItem,
+    36→    36→  SelectTrigger,
+    37→    37→  SelectValue,
+    38→    38→} from '@/components/ui/select'
+    39→    39→import { Skeleton } from '@/components/ui/skeleton'
+    40→    40→import { Textarea } from '@/components/ui/textarea'
+    41→    41→import { COPILOT_PROVIDERS, findCopilotProvider } from '@/lib/copilot-providers'
+    42→    42→import { formatDateID } from '@/lib/format'
+    43→    43→import type { AppSettingsDto, CopilotSettingsDto, SetupWizardStatusDto } from '@/types/budget'
+    44→    44→
+    45→    45→/**
+    46→    46→ * Setup Wizard — dialog panduan konfigurasi awal aplikasi (khusus admin).
+    47→    47→ * 5 langkah: Pengantar → Identitas → Keamanan Akun → AI Copilot → Selesai.
+    48→    48→ * Setiap langkah bersifat opsional; admin dapat melanjutkan tanpa menyimpan.
+    49→    49→ */
+    50→    50→
+    51→    51→const STEPS = [
+    52→    52→  { id: 'welcome', label: 'Pengantar', icon: Wand2 },
+    53→    53→  { id: 'identity', label: 'Identitas', icon: Building2 },
+    54→    54→  { id: 'security', label: 'Keamanan', icon: ShieldCheck },
+    55→    55→  { id: 'copilot', label: 'AI Copilot', icon: Bot },
+    56→    56→  { id: 'finish', label: 'Selesai', icon: Flag },
+    57→    57→] as const
+    58→    58→
+    59→    59→/** Kolom identitas yang dapat diubah lewat wizard (subset Pengaturan Aplikasi). */
+    60→    60→const IDENTITY_FIELDS = [
+    61→    61→  {
+    62→    62→    key: 'appTitle' as const,
+    63→    63→    label: 'Judul Dashboard',
+    64→    64→    placeholder: 'Dashboard Keuangan Kab. …',
+    65→    65→    max: 100,
+    66→    66→  },
+    67→    67→  {
+    68→    68→    key: 'govName' as const,
+    69→    69→    label: 'Nama Pemerintah Daerah',
+    70→    70→    placeholder: 'Pemerintah Kabupaten …',
+    71→    71→    max: 100,
+    72→    72→  },
+    73→    73→  {
+    74→    74→    key: 'brandText' as const,
+    75→    75→    label: 'Teks Brand Header',
+    76→    76→    placeholder: 'PEMDA',
+    77→    77→    max: 30,
+    78→    78→  },
+    79→    79→  {
+    80→    80→    key: 'brandSubtext' as const,
+    81→    81→    label: 'Sub-teks Brand',
+    82→    82→    placeholder: 'Kabupaten …',
+    83→    83→    max: 60,
+    84→    84→  },
+    85→    85→  {
+    86→    86→    key: 'footerText' as const,
+    87→    87→    label: 'Teks Footer',
+    88→    88→    placeholder: 'Dashboard Monitoring Pengelolaan Keuangan Daerah — …',
+    89→    89→    max: 200,
+    90→    90→    textarea: true,
+    91→    91→  },
+    92→    92→]
+    93→    93→
+    94→    94→/** Hook status Setup Wizard (dipakai bersama oleh wizard & kartu di Pengaturan). */
+    95→    95→export function useSetupWizardStatus(enabled = true) {
+    96→    96→  return useQuery({
+    97→    97→    queryKey: ['setup-wizard-status'],
+    98→    98→    enabled,
+    99→    99→    queryFn: async (): Promise<SetupWizardStatusDto> => {
+   100→   100→      const res = await fetch('/api/admin/setup-wizard')
+   101→   101→      if (!res.ok) throw new Error('Gagal memuat status Setup Wizard')
+   102→   102→      const json = (await res.json()) as { data: SetupWizardStatusDto }
+   103→   103→      return json.data
+   104→   104→    },
+   105→   105→    retry: 1,
+   106→   106→  })
+   107→   107→}
+   108→   108→
+   109→   109→interface SetupWizardProps {
+   110→   110→  open: boolean
+   111→   111→  onOpenChange: (open: boolean) => void
+   112→   112→}
+   113→   113→
+   114→   114→export function SetupWizard({ open, onOpenChange }: SetupWizardProps) {
+   115→   115→  const { toast } = useToast()
+   116→   116→  const queryClient = useQueryClient()
+   117→   117→  const settingsQuery = useSettings()
+   118→   118→  const statusQuery = useSetupWizardStatus(open)
+   119→   119→
+   120→   120→  const [step, setStep] = useState(0)
+   121→   121→
+   122→   122→  // ---- Langkah identitas: draf > nilai server ----
+   123→   123→  const [idDraft, setIdDraft] = useState<Partial<Record<(typeof IDENTITY_FIELDS)[number]['key'], string>>>({})
+   124→   124→  const [idSaving, setIdSaving] = useState(false)
+   125→   125→
+   126→   126→  const identityValue = (key: (typeof IDENTITY_FIELDS)[number]['key']): string => {
+   127→   127→    if (idDraft[key] !== undefined) return idDraft[key]
+   128→   128→    const current = settingsQuery.data?.[key]
+   129→   129→    return typeof current === 'string' ? current : ''
+   130→   130→  }
+   131→   131→
+   132→   132→  // ---- Langkah keamanan: ganti password akun sendiri ----
+   133→   133→  const [pwCurrent, setPwCurrent] = useState('')
+   134→   134→  const [pwNew, setPwNew] = useState('')
+   135→   135→  const [pwConfirm, setPwConfirm] = useState('')
+   136→   136→  const [showPw, setShowPw] = useState(false)
+   137→   137→  const [pwSaving, setPwSaving] = useState(false)
+   138→   138→  const [pwDone, setPwDone] = useState(false)
+   139→   139→  const [pwError, setPwError] = useState<string | null>(null)
+   140→   140→
+   141→   141→  // ---- Langkah AI Copilot: draf konfigurasi provider ----
+   142→   142→  const copilotQuery = useQuery({
+   143→   143→    queryKey: ['copilot-settings'],
+   144→   144→    enabled: open,
+   145→   145→    queryFn: async (): Promise<CopilotSettingsDto> => {
+   146→   146→      const res = await fetch('/api/admin/settings/copilot')
+   147→   147→      if (!res.ok) throw new Error('Gagal memuat konfigurasi AI Copilot')
+   148→   148→      const json = (await res.json()) as { data: CopilotSettingsDto }
+   149→   149→      return json.data
+   150→   150→    },
+   151→   151→    staleTime: 30_000,
+   152→   152→    retry: 1,
+   153→   153→  })
+   154→   154→  const [cpHydrated, setCpHydrated] = useState(false)
+   155→   155→  const [cpProvider, setCpProvider] = useState('default')
+   156→   156→  const [cpModel, setCpModel] = useState('')
+   157→   157→  const [cpBase, setCpBase] = useState('')
+   158→   158→  const [cpKey, setCpKey] = useState('')
+   159→   159→  const [cpSaving, setCpSaving] = useState(false)
+   160→   160→  const [cpTesting, setCpTesting] = useState(false)
+   161→   161→  const [cpTest, setCpTest] = useState<{ ok: boolean; message: string } | null>(null)
+   162→   162→
+   163→   163→  const [finishing, setFinishing] = useState(false)
+   164→   164→
+   165→   165→  // Reset wizard saat dibuka ulang; bersihkan data sensitif saat ditutup
+   166→   166→  useEffect(() => {
+   167→   167→    if (open) {
+   168→   168→      setStep(0)
+   169→   169→    } else {
+   170→   170→      setPwCurrent('')
+   171→   171→      setPwNew('')
+   172→   172→      setPwConfirm('')
+   173→   173→      setPwDone(false)
+   174→   174→      setPwError(null)
+   175→   175→      setCpTest(null)
+   176→   176→      setFinishing(false)
+   177→   177→    }
+   178→   178→  }, [open])
+   179→   179→
+   180→   180→  // Isi draf copilot dari data server saat pertama dimuat
+   181→   181→  useEffect(() => {
+   182→   182→    if (copilotQuery.data && !cpHydrated) {
+   183→   183→      setCpProvider(copilotQuery.data.provider)
+   184→   184→      setCpModel(copilotQuery.data.model ?? '')
+   185→   185→      setCpBase(copilotQuery.data.baseUrl ?? '')
+   186→   186→      setCpHydrated(true)
+   187→   187→    }
+   188→   188→  }, [copilotQuery.data, cpHydrated])
+   189→   189→
+   190→   190→  const cpProviderDef = findCopilotProvider(cpProvider) ?? COPILOT_PROVIDERS[0]
+   191→   191→  const cpIsDefault = cpProviderDef.id === 'default'
+   192→   192→  const cpKeyPlaceholder = copilotQuery.data?.hasApiKey
+   193→   193→    ? `${copilotQuery.data.apiKeyMasked} — tersimpan (biarkan kosong untuk memakainya)`
+   194→   194→    : cpProviderDef.keyHint || 'API Key'
+   195→   195→
+   196→   196→  const status = statusQuery.data
+   197→   197→  const checks = status?.checks
+   198→   198→
+   199→   199→  /** Perbarui status wizard (checklist langkah pengantar & selesai). */
+   200→   200→  async function refreshStatus() {
+   201→   201→    await queryClient.invalidateQueries({ queryKey: ['setup-wizard-status'] })
+   202→   202→  }
+   203→   203→
+   204→   204→  /** Ganti provider: praisi Base URL & contoh model dari registry. */
+   205→   205→  function selectCpProvider(id: string) {
+   206→   206→    setCpProvider(id)
+   207→   207→    const p = findCopilotProvider(id)
+   208→   208→    setCpBase(p?.baseUrl ?? '')
+   209→   209→    setCpModel(p?.modelPlaceholder ?? '')
+   210→   210→    setCpKey('')
+   211→   211→    setCpTest(null)
+   212→   212→  }
+   213→   213→
+   214→   214→  /** Simpan identitas dashboard, lalu lanjut ke langkah berikutnya. */
+   215→   215→  async function saveIdentity() {
+   216→   216→    if (idSaving) return
+   217→   217→    if (!identityValue('appTitle').trim() || !identityValue('govName').trim()) {
+   218→   218→      toast({
+   219→   219→        title: 'Lengkapi identitas',
+   220→   220→        description: 'Judul Dashboard dan Nama Pemerintah Daerah wajib diisi.',
+   221→   221→        variant: 'destructive',
+   222→   222→      })
+   223→   223→      return
+   224→   224→    }
+   225→   225→    setIdSaving(true)
+   226→   226→    try {
+   227→   227→      const body: Record<string, string> = {}
+   228→   228→      for (const f of IDENTITY_FIELDS) body[f.key] = identityValue(f.key)
+   229→   229→      const res = await fetch('/api/admin/settings', {
+   230→   230→        method: 'PUT',
+   231→   231→        headers: { 'Content-Type': 'application/json' },
+   232→   232→        body: JSON.stringify(body),
+   233→   233→      })
+   234→   234→      const json = (await res.json()) as { data?: AppSettingsDto; error?: string }
+   235→   235→      if (!res.ok || !json.data) throw new Error(json.error ?? 'Gagal menyimpan')
+   236→   236→      toast({ title: 'Identitas dashboard tersimpan' })
+   237→   237→      setIdDraft({})
+   238→   238→      await queryClient.invalidateQueries({ queryKey: ['settings'] })
+   239→   239→      await refreshStatus()
+   240→   240→      setStep(2)
+   241→   241→    } catch (err) {
+   242→   242→      toast({ title: 'Gagal menyimpan identitas', description: String(err), variant: 'destructive' })
+   243→   243→    } finally {
+   244→   244→      setIdSaving(false)
+   245→   245→    }
+   246→   246→  }
+   247→   247→
+   248→   248→  /** Ganti password akun sendiri, lalu lanjut ke langkah berikutnya. */
+   249→   249→  async function changePassword() {
+   250→   250→    if (pwSaving) return
+   251→   251→    setPwError(null)
+   252→   252→    if (!pwCurrent || !pwNew || !pwConfirm) {
+   253→   253→      setPwError('Semua kolom password wajib diisi (atau kosongkan semua untuk melewati).')
+   254→   254→      return
+   255→   255→    }
+   256→   256→    if (pwNew.length < 8) {
+   257→   257→      setPwError('Password baru minimal 8 karakter.')
+   258→   258→      return
+   259→   259→    }
+   260→   260→    if (pwNew !== pwConfirm) {
+   261→   261→      setPwError('Konfirmasi password tidak sama dengan password baru.')
+   262→   262→      return
+   263→   263→    }
+   264→   264→    if (pwNew === pwCurrent) {
+   265→   265→      setPwError('Password baru harus berbeda dari password saat ini.')
+   266→   266→      return
+   267→   267→    }
+   268→   268→    setPwSaving(true)
+   269→   269→    try {
+   270→   270→      const res = await fetch('/api/admin/users/change-password', {
+   271→   271→        method: 'POST',
+   272→   272→        headers: { 'Content-Type': 'application/json' },
+   273→   273→        body: JSON.stringify({ currentPassword: pwCurrent, newPassword: pwNew }),
+   274→   274→      })
+   275→   275→      const json = (await res.json()) as { data?: { username: string }; error?: string }
+   276→   276→      if (!res.ok || !json.data) throw new Error(json.error ?? 'Gagal mengganti password')
+   277→   277→      toast({ title: 'Password berhasil diganti' })
+   278→   278→      setPwDone(true)
+   279→   279→      setPwCurrent('')
+   280→   280→      setPwNew('')
+   281→   281→      setPwConfirm('')
+   282→   282→      await refreshStatus()
+   283→   283→      setStep(3)
+   284→   284→    } catch (err) {
+   285→   285→      setPwError(String(err))
+   286→   286→    } finally {
+   287→   287→      setPwSaving(false)
+   288→   288→    }
+   289→   289→  }
+   290→   290→
+   291→   291→  /** Simpan konfigurasi AI Copilot, lalu lanjut ke langkah selesai. */
+   292→   292→  async function saveCopilot() {
+   293→   293→    if (cpSaving) return
+   294→   294→    if (cpIsDefault) {
+   295→   295→      setStep(4)
+   296→   296→      return
+   297→   297→    }
+   298→   298→    if (!cpModel.trim()) {
+   299→   299→      toast({ title: 'Nama model wajib diisi', variant: 'destructive' })
+   300→   300→      return
+   301→   301→    }
+   302→   302→    setCpSaving(true)
+   303→   303→    try {
+   304→   304→      const res = await fetch('/api/admin/settings/copilot', {
+   305→   305→        method: 'PUT',
+   306→   306→        headers: { 'Content-Type': 'application/json' },
+   307→   307→        body: JSON.stringify({
+   308→   308→          provider: cpProvider,
+   309→   309→          baseUrl: cpBase,
+   310→   310→          model: cpModel,
+   311→   311→          ...(cpKey.trim() ? { apiKey: cpKey.trim() } : {}),
+   312→   312→        }),
+   313→   313→      })
+   314→   314→      const json = (await res.json()) as { data?: CopilotSettingsDto; error?: string }
+   315→   315→      if (!res.ok || !json.data) throw new Error(json.error ?? 'Gagal menyimpan')
+   316→   316→      toast({ title: 'Konfigurasi AI Copilot tersimpan' })
+   317→   317→      setCpKey('')
+   318→   318→      setCpTest(null)
+   319→   319→      await queryClient.invalidateQueries({ queryKey: ['copilot-settings'] })
+   320→   320→      await refreshStatus()
+   321→   321→      setStep(4)
+   322→   322→    } catch (err) {
+   323→   323→      toast({ title: 'Gagal menyimpan konfigurasi', description: String(err), variant: 'destructive' })
+   324→   324→    } finally {
+   325→   325→      setCpSaving(false)
+   326→   326→    }
+   327→   327→  }
+   328→   328→
+   329→   329→  /** Uji koneksi AI Copilot memakai nilai draf (key kosong → pakai tersimpan). */
+   330→   330→  async function testCopilot() {
+   331→   331→    setCpTesting(true)
+   332→   332→    setCpTest(null)
+   333→   333→    try {
+   334→   334→      const res = await fetch('/api/admin/settings/copilot/test', {
+   335→   335→        method: 'POST',
+   336→   336→        headers: { 'Content-Type': 'application/json' },
+   337→   337→        body: JSON.stringify({
+   338→   338→          provider: cpProvider,
+   339→   339→          ...(cpIsDefault
+   340→   340→            ? {}
+   341→   341→            : { baseUrl: cpBase, model: cpModel, ...(cpKey.trim() ? { apiKey: cpKey.trim() } : {}) }),
+   342→   342→        }),
+   343→   343→      })
+   344→   344→      const json = (await res.json()) as {
+   345→   345→        data?: { engine: string; reply: string; latencyMs: number }
+   346→   346→        error?: string
+   347→   347→      }
+   348→   348→      if (!res.ok || !json.data) throw new Error(json.error ?? 'Gagal menguji koneksi')
+   349→   349→      setCpTest({
+   350→   350→        ok: true,
+   351→   351→        message: `Berhasil terhubung ke ${json.data.engine} dalam ${json.data.latencyMs} ms — balasan: "${json.data.reply.slice(0, 80)}"`,
+   352→   352→      })
+   353→   353→    } catch (err) {
+   354→   354→      setCpTest({ ok: false, message: String(err) })
+   355→   355→    } finally {
+   356→   356→      setCpTesting(false)
+   357→   357→    }
+   358→   358→  }
+   359→   359→
+   360→   360→  /** Tandai setup selesai dan tutup wizard. */
+   361→   361→  async function finishSetup() {
+   362→   362→    if (finishing) return
+   363→   363→    setFinishing(true)
+   364→   364→    try {
+   365→   365→      const res = await fetch('/api/admin/setup-wizard', { method: 'POST' })
+   366→   366→      const json = (await res.json()) as { data?: SetupWizardStatusDto; error?: string }
+   367→   367→      if (!res.ok || !json.data) throw new Error(json.error ?? 'Gagal menandai setup selesai')
+   368→   368→      toast({ title: 'Setup selesai — dashboard siap digunakan' })
+   369→   369→      await refreshStatus()
+   370→   370→      onOpenChange(false)
+   371→   371→    } catch (err) {
+   372→   372→      toast({ title: 'Gagal menandai setup selesai', description: String(err), variant: 'destructive' })
+   373→   373→    } finally {
+   374→   374→      setFinishing(false)
+   375→   375→    }
+   376→   376→  }
+   377→   377→
+   378→   378→  /** Pergi ke langkah tertentu; refresh status saat memasuki langkah Selesai. */
+   379→   379→  async function goTo(next: number) {
+   380→   380→    setStep(next)
+   381→   381→    if (next === 4) await refreshStatus()
+   382→   382→  }
+   383→   383→
+   384→   384→  const pwFormActive = !!(pwCurrent || pwNew || pwConfirm)
+   385→   385→
+   386→   386→  // ---- Aksi utama per langkah ----
+   387→   387→  let primaryAction: { label: string; icon: React.ReactNode; onClick: () => void; disabled?: boolean; loading?: boolean }
+   388→   388→  let secondaryAction: { label: string; onClick: () => void } | null = null
+   389→   389→
+   390→   390→  if (step === 0) {
+   391→   391→    primaryAction = { label: 'Mulai Konfigurasi', icon: <Wand2 className="h-4 w-4" aria-hidden="true" />, onClick: () => goTo(1) }
+   392→   392→  } else if (step === 1) {
+   393→   393→    primaryAction = {
+   394→   394→      label: 'Simpan & Lanjut',
+   395→   395→      icon: idSaving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Save className="h-4 w-4" aria-hidden="true" />,
+   396→   396→      onClick: saveIdentity,
+   397→   397→      disabled: idSaving || settingsQuery.isLoading,
+   398→   398→    }
+   399→   399→    secondaryAction = { label: 'Lewati', onClick: () => goTo(2) }
+   400→   400→  } else if (step === 2) {
+   401→   401→    primaryAction = {
+   402→   402→      label: pwFormActive ? 'Ganti Password & Lanjut' : 'Lanjut',
+   403→   403→      icon: pwSaving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <ShieldCheck className="h-4 w-4" aria-hidden="true" />,
+   404→   404→      onClick: pwFormActive ? changePassword : () => goTo(3),
+   405→   405→      disabled: pwSaving,
+   406→   406→    }
+   407→   407→  } else if (step === 3) {
+   408→   408→    primaryAction = {
+   409→   409→      label: cpIsDefault ? 'Lanjut' : 'Simpan & Lanjut',
+   410→   410→      icon: cpSaving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Bot className="h-4 w-4" aria-hidden="true" />,
+   411→   411→      onClick: saveCopilot,
+   412→   412→      disabled: cpSaving || (!cpIsDefault && !cpModel.trim()),
+   413→   413→    }
+   414→   414→    if (!cpIsDefault) secondaryAction = { label: 'Lewati', onClick: () => goTo(4) }
+   415→   415→  } else {
+   416→   416→    primaryAction = {
+   417→   417→      label: 'Selesaikan Setup',
+   418→   418→      icon: finishing ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <CheckCircle2 className="h-4 w-4" aria-hidden="true" />,
+   419→   419→      onClick: finishSetup,
+   420→   420→      disabled: finishing,
+   421→   421→    }
+   422→   422→    secondaryAction = { label: 'Tutup tanpa menandai selesai', onClick: () => onOpenChange(false) }
+   423→   423→  }
+   424→   424→
+   425→   425→  return (
+   426→   426→    <Dialog open={open} onOpenChange={onOpenChange}>
+   427→   427→      <DialogContent className="flex max-h-[90dvh] w-full max-w-[min(42rem,calc(100%-2rem))] flex-col gap-0 overflow-hidden p-0 [&_[data-slot=dialog-close]]:rounded-md [&_[data-slot=dialog-close]]:text-white/80 [&_[data-slot=dialog-close]]:transition-colors [&_[data-slot=dialog-close]]:hover:bg-white/10 [&_[data-slot=dialog-close]]:hover:text-white">
+   428→   428→        {/* Header */}
+   429→   429→        <div className="bg-gradient-to-r from-[#17408b] to-[#12326e] px-5 py-4">
+   430→   430→          <DialogTitle className="flex items-center gap-2 text-base font-bold text-white">
+   431→   431→            <Wand2 className="h-5 w-5" aria-hidden="true" />
+   432→   432→            Setup Wizard — Konfigurasi Dashboard
+   433→   433→          </DialogTitle>
+   434→   434→          <DialogDescription className="mt-1 text-xs text-white/80">
+   435→   435→            Panduan berlangkah untuk menyiapkan identitas, keamanan, dan AI Copilot
+   436→   436→            dashboard keuangan daerah Anda.
+   437→   437→          </DialogDescription>
+   438→   438→        </div>
+   439→   439→
+   440→   440→        {/* Stepper */}
+   441→   441→        <nav aria-label="Progres langkah setup" className="border-b bg-muted/30 px-5 py-3">
+   442→   442→          <ol className="flex w-full items-start">
+   443→   443→            {STEPS.map((s, i) => {
+   444→   444→              const done = i < step
+   445→   445→              const current = i === step
+   446→   446→              return (
+   447→   447→                <li key={s.id} className="flex min-w-0 flex-1 flex-col items-center">
+   448→   448→                  <div className="flex w-full items-center">
+   449→   449→                    <span
+   450→   450→                      aria-hidden="true"
+   451→   451→                      className={`h-0.5 flex-1 rounded-full ${i === 0 ? 'invisible' : done || current ? 'bg-[#17408b]' : 'bg-border'}`}
+   452→   452→                    />
+   453→   453→                    <span
+   454→   454→                      aria-current={current ? 'step' : undefined}
+   455→   455→                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 text-xs font-bold transition-colors ${
+   456→   456→                        done
+   457→   457→                          ? 'border-emerald-600 bg-emerald-600 text-white'
+   458→   458→                          : current
+   459→   459→                            ? 'border-[#17408b] bg-[#17408b] text-white'
+   460→   460→                            : 'border-border bg-background text-muted-foreground'
+   461→   461→                      }`}
+   462→   462→                    >
+   463→   463→                      {done ? (
+   464→   464→                        <Check className="h-4 w-4" aria-hidden="true" />
+   465→   465→                      ) : (
+   466→   466→                        <s.icon className="h-4 w-4" aria-hidden="true" />
+   467→   467→                      )}
+   468→   468→                    </span>
+   469→   469→                    <span
+   470→   470→                      aria-hidden="true"
+   471→   471→                      className={`h-0.5 flex-1 rounded-full ${i === STEPS.length - 1 ? 'invisible' : done ? 'bg-[#17408b]' : 'bg-border'}`}
+   472→   472→                    />
+   473→   473→                  </div>
+   474→   474→                  <span
+   475→   475→                    className={`mt-1 hidden whitespace-nowrap text-[10px] font-semibold sm:block ${
+   476→   476→                      current ? 'text-[#17408b]' : done ? 'text-emerald-700' : 'text-muted-foreground'
+   477→   477→                    }`}
+   478→   478→                  >
+   479→   479→                    {s.label}
+   480→   480→                  </span>
+   481→   481→                </li>
+   482→   482→              )
+   483→   483→            })}
+   484→   484→          </ol>
+   485→   485→        </nav>
+   486→   486→
+   487→   487→        {/* Isi langkah */}
+   488→   488→        <div className="nice-scrollbar min-h-[16rem] flex-1 overflow-y-auto px-5 py-5">
+   489→   489→          {/* ===== Langkah 0: Pengantar ===== */}
+   490→   490→          {step === 0 && (
+   491→   491→            <div>
+   492→   492→              <div className="mb-4 flex items-start gap-3">
+   493→   493→                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#17408b]/10 text-[#17408b]">
+   494→   494→                  <Wand2 className="h-6 w-6" aria-hidden="true" />
+   495→   495→                </span>
+   496→   496→                <div>
+   497→   497→                  <h3 className="text-sm font-bold text-foreground">Selamat datang di Setup Wizard</h3>
+   498→   498→                  <p className="mt-0.5 text-xs text-muted-foreground">
+   499→   499→                    Wizard ini membantu menyiapkan hal-hal penting sebelum dashboard
+   500→   500→                    dipakai sepenuhnya. Semua langkah bersifat opsional dan dapat
+   501→   501→                    diubah lagi nanti lewat menu Pengaturan.
+   502→   502→                  </p>
+   503→   503→                </div>
+   504→   504→              </div>
+   505→   505→
+   506→   506→              {statusQuery.isLoading ? (
+   507→   507→                <div className="space-y-2" aria-label="Memuat status">
+   508→   508→                  <Skeleton className="h-12 w-full" />
+   509→   509→                  <Skeleton className="h-12 w-full" />
+   510→   510→                  <Skeleton className="h-12 w-full" />
+   511→   511→                </div>
+   512→   512→              ) : (
+   513→   513→                <ul className="space-y-2" aria-label="Status konfigurasi saat ini">
+   514→   514→                  <StatusRow
+   515→   515→                    icon={checks?.identityConfigured ? <CheckCircle2 className="h-5 w-5" /> : <Building2 className="h-5 w-5" />}
+   516→   516→                    tone={checks?.identityConfigured ? 'ok' : 'muted'}
+   517→   517→                    label="Identitas Dashboard"
+   518→   518→                    desc={
+   519→   519→                      checks?.identityConfigured
+   520→   520→                        ? `Judul & nama pemda sudah dikustomisasi: “${settingsQuery.data?.appTitle ?? '—'}”`
+   521→   521→                        : 'Masih memakai nilai bawaan — akan diatur pada langkah berikutnya.'
+   522→   522→                    }
+   523→   523→                  />
+   524→   524→                  <StatusRow
+   525→   525→                    icon={checks?.passwordDefault ? <ShieldAlert className="h-5 w-5" /> : <ShieldCheck className="h-5 w-5" />}
+   526→   526→                    tone={checks?.passwordDefault ? 'warn' : 'ok'}
+   527→   527→                    label="Keamanan Akun Admin"
+   528→   528→                    desc={
+   529→   529→                      checks?.passwordDefault
+   530→   530→                        ? `Akun ${status?.username ?? 'admin'} masih memakai password bawaan (admin123) — sangat disarankan diganti.`
+   531→   531→                        : `Password akun ${status?.username ?? 'admin'} sudah diganti dari bawaan.`
+   532→   532→                    }
+   533→   533→                  />
+   534→   534→                  <StatusRow
+   535→   535→                    icon={<Bot className="h-5 w-5" />}
+   536→   536→                    tone={checks?.copilotConfigured ? 'ok' : 'muted'}
+   537→   537→                    label="AI Copilot"
+   538→   538→                    badge="Opsional"
+   539→   539→                    desc={
+   540→   540→                      checks?.copilotConfigured
+   541→   541→                        ? 'Provider kustom aktif — Copilot memakai penyedia LLM pilihan Anda.'
+   542→   542→                        : 'Mesin bawaan Z.ai aktif tanpa konfigurasi — dapat diganti ke provider mana pun.'
+   543→   543→                    }
+   544→   544→                  />
+   545→   545→                </ul>
+   546→   546→              )}
+   547→   547→
+   548→   548→              {status?.completed && status.completedAt && (
+   549→   549→                <p className="mt-4 rounded-md border border-[#17408b]/20 bg-[#17408b]/5 p-3 text-xs text-[#17408b]">
+   550→   550→                  Setup sebelumnya ditandai selesai pada {formatDateID(new Date(status.completedAt))}.
+   551→   551→                  Anda dapat menjalankan wizard ini kembali kapan saja.
+   552→   552→                </p>
+   553→   553→              )}
+   554→   554→            </div>
+   555→   555→          )}
+   556→   556→
+   557→   557→          {/* ===== Langkah 1: Identitas ===== */}
+   558→   558→          {step === 1 && (
+   559→   559→            <div>
+   560→   560→              <h3 className="text-sm font-bold text-foreground">Identitas Dashboard</h3>
+   561→   561→              <p className="mb-4 mt-0.5 text-xs text-muted-foreground">
+   562→   562→                Atur identitas dasar yang tampil di seluruh halaman. Logo, favicon, dan
+   563→   563→                warna header dapat diatur kemudian lewat menu Pengaturan Aplikasi.
+   564→   564→              </p>
+   565→   565→              {settingsQuery.isLoading ? (
+   566→   566→                <div className="space-y-3">
+   567→   567→                  <Skeleton className="h-10 w-full" />
+   568→   568→                  <Skeleton className="h-10 w-full" />
+   569→   569→                  <Skeleton className="h-10 w-full" />
+   570→   570→                </div>
+   571→   571→              ) : (
+   572→   572→                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+   573→   573→                  {IDENTITY_FIELDS.map((f) => (
+   574→   574→                    <div key={f.key} className={f.textarea ? 'sm:col-span-2' : ''}>
+   575→   575→                      <Label htmlFor={`wiz-${f.key}`} className="mb-1.5 flex items-center justify-between">
+   576→   576→                        <span>{f.label}</span>
+   577→   577→                        <span className="text-[10px] font-normal text-muted-foreground">
+   578→   578→                          {identityValue(f.key).length}/{f.max}
+   579→   579→                        </span>
+   580→   580→                      </Label>
+   581→   581→                      {f.textarea ? (
+   582→   582→                        <Textarea
+   583→   583→                          id={`wiz-${f.key}`}
+   584→   584→                          value={identityValue(f.key)}
+   585→   585→                          placeholder={f.placeholder}
+   586→   586→                          maxLength={f.max}
+   587→   587→                          rows={2}
+   588→   588→                          onChange={(e) => setIdDraft((d) => ({ ...d, [f.key]: e.target.value }))}
+   589→   589→                        />
+   590→   590→                      ) : (
+   591→   591→                        <Input
+   592→   592→                          id={`wiz-${f.key}`}
+   593→   593→                          value={identityValue(f.key)}
+   594→   594→                          placeholder={f.placeholder}
+   595→   595→                          maxLength={f.max}
+   596→   596→                          onChange={(e) => setIdDraft((d) => ({ ...d, [f.key]: e.target.value }))}
+   597→   597→                        />
+   598→   598→                      )}
+   599→   599→                    </div>
+   600→   600→                  ))}
+   601→   601→                </div>
+   602→   602→              )}
+   603→   603→            </div>
+   604→   604→          )}
+   605→   605→
+   606→   606→          {/* ===== Langkah 2: Keamanan ===== */}
+   607→   607→          {step === 2 && (
+   608→   608→            <div>
+   609→   609→              <h3 className="text-sm font-bold text-foreground">Keamanan Akun Admin</h3>
+   610→   610→              <p className="mb-4 mt-0.5 text-xs text-muted-foreground">
+   611→   611→                Password bawaan bersifat publik dan tidak aman untuk penggunaan nyata.
+   612→   612→                Ganti password akun <span className="font-semibold">{status?.username ?? 'admin'}</span> sekarang,
+   613→   613→                atau kosongkan semua kolom untuk melanjutkan tanpa mengganti.
+   614→   614→              </p>
+   615→   615→
+   616→   616→              {checks?.passwordDefault ? (
+   617→   617→                <p role="alert" className="mb-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800">
+   618→   618→                  <ShieldAlert className="mr-1 inline h-4 w-4 align-text-bottom" aria-hidden="true" />
+   619→   619→                  Akun ini masih memakai password bawaan <span className="font-mono font-bold">admin123</span> —
+   620→   620→                  sangat disarankan diganti sekarang.
+   621→   621→                </p>
+   622→   622→              ) : (
+   623→   623→                <p className="mb-4 rounded-md border border-emerald-300 bg-emerald-50 p-3 text-xs text-emerald-800">
+   624→   624→                  <ShieldCheck className="mr-1 inline h-4 w-4 align-text-bottom" aria-hidden="true" />
+   625→   625→                  Password akun ini sudah diganti dari bawaan. Anda tetap dapat menggantinya lagi bila perlu.
+   626→   626→                </p>
+   627→   627→              )}
+   628→   628→
+   629→   629→              {pwDone && (
+   630→   630→                <p role="status" className="mb-4 rounded-md border border-emerald-300 bg-emerald-50 p-3 text-xs text-emerald-800">
+   631→   631→                  <CheckCircle2 className="mr-1 inline h-4 w-4 align-text-bottom" aria-hidden="true" />
+   632→   632→                  Password berhasil diganti. Sesi lain (bila ada) telah dikeluarkan.
+   633→   633→                </p>
+   634→   634→              )}
+   635→   635→
+   636→   636→              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+   637→   637→                <div className="sm:col-span-2">
+   638→   638→                  <Label htmlFor="wiz-pw-current" className="mb-1.5">
+   639→   639→                    Password Saat Ini
+   640→   640→                  </Label>
+   641→   641→                  <Input
+   642→   642→                    id="wiz-pw-current"
+   643→   643→                    type={showPw ? 'text' : 'password'}
+   644→   644→                    value={pwCurrent}
+   645→   645→                    onChange={(e) => setPwCurrent(e.target.value)}
+   646→   646→                    placeholder="Password saat ini"
+   647→   647→                    autoComplete="current-password"
+   648→   648→                  />
+   649→   649→                </div>
+   650→   650→                <div>
+   651→   651→                  <Label htmlFor="wiz-pw-new" className="mb-1.5">
+   652→   652→                    Password Baru
+   653→   653→                  </Label>
+   654→   654→                  <Input
+   655→   655→                    id="wiz-pw-new"
+   656→   656→                    type={showPw ? 'text' : 'password'}
+   657→   657→                    value={pwNew}
+   658→   658→                    onChange={(e) => setPwNew(e.target.value)}
+   659→   659→                    placeholder="Minimal 8 karakter"
+   660→   660→                    autoComplete="new-password"
+   661→   661→                  />
+   662→   662→                </div>
+   663→   663→                <div>
+   664→   664→                  <Label htmlFor="wiz-pw-confirm" className="mb-1.5">
+   665→   665→                    Konfirmasi Password Baru
+   666→   666→                  </Label>
+   667→   667→                  <Input
+   668→   668→                    id="wiz-pw-confirm"
+   669→   669→                    type={showPw ? 'text' : 'password'}
+   670→   670→                    value={pwConfirm}
+   671→   671→                    onChange={(e) => setPwConfirm(e.target.value)}
+   672→   672→                    placeholder="Ulangi password baru"
+   673→   673→                    autoComplete="new-password"
+   674→   674→                  />
+   675→   675→                </div>
+   676→   676→              </div>
+   677→   677→
+   678→   678→              <button
+   679→   679→                type="button"
+   680→   680→                onClick={() => setShowPw((v) => !v)}
+   681→   681→                className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground"
+   682→   682→              >
+   683→   683→                {showPw ? (
+   684→   684→                  <>
+   685→   685→                    <EyeOff className="h-3.5 w-3.5" aria-hidden="true" /> Sembunyikan password
+   686→   686→                  </>
+   687→   687→                ) : (
+   688→   688→                  <>
+   689→   689→                    <Eye className="h-3.5 w-3.5" aria-hidden="true" /> Tampilkan password
+   690→   690→                  </>
+   691→   691→                )}
+   692→   692→              </button>
+   693→   693→
+   694→   694→              {pwError && (
+   695→   695→                <p role="alert" className="mt-3 rounded-md border border-red-300 bg-red-50 p-3 text-xs text-red-700">
+   696→   696→                  {pwError}
+   697→   697→                </p>
+   698→   698→              )}
+   699→   699→            </div>
+   700→   700→          )}
+   701→   701→
+   702→   702→          {/* ===== Langkah 3: AI Copilot ===== */}
+   703→   703→          {step === 3 && (
+   704→   704→            <div>
+   705→   705→              <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+   706→   706→                <h3 className="text-sm font-bold text-foreground">AI Copilot — Provider LLM</h3>
+   707→   707→                <span className="inline-flex items-center gap-1.5 rounded-full border border-[#17408b]/20 bg-[#17408b]/5 px-2.5 py-0.5 text-[11px] font-semibold text-[#17408b]">
+   708→   708→                  <Bot className="h-3 w-3" aria-hidden="true" />
+   709→   709→                  {copilotQuery.data?.providerLabel ?? 'Bawaan (Z.ai)'}
+   710→   710→                </span>
+   711→   711→              </div>
+   712→   712→              <p className="mb-4 mt-0.5 text-xs text-muted-foreground">
+   713→   713→                AI Copilot sudah siap dipakai dengan mesin bawaan Z.ai. Untuk memakai
+   714→   714→                provider sendiri (OpenAI, Claude, Gemini, Groq, DeepSeek, dll.), pilih
+   715→   715→                provider dan isi kredensial — semua provider didukung lewat protokol
+   716→   716→                OpenAI-Compatible.
+   717→   717→              </p>
+   718→   718→
+   719→   719→              {copilotQuery.isLoading ? (
+   720→   720→                <Skeleton className="h-32 w-full" />
+   721→   721→              ) : (
+   722→   722→                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+   723→   723→                  <div className="space-y-1.5">
+   724→   724→                    <Label>Provider</Label>
+   725→   725→                    <Select value={cpProvider} onValueChange={selectCpProvider}>
+   726→   726→                      <SelectTrigger aria-label="Pilih provider LLM">
+   727→   727→                        <SelectValue />
+   728→   728→                      </SelectTrigger>
+   729→   729→                      <SelectContent>
+   730→   730→                        {COPILOT_PROVIDERS.map((p) => (
+   731→   731→                          <SelectItem key={p.id} value={p.id}>
+   732→   732→                            {p.label}
+   733→   733→                          </SelectItem>
+   734→   734→                        ))}
+   735→   735→                      </SelectContent>
+   736→   736→                    </Select>
+   737→   737→                    <p className="text-[11px] text-muted-foreground">{cpProviderDef.hint}</p>
+   738→   738→                  </div>
+   739→   739→
+   740→   740→                  <div className="space-y-1.5">
+   741→   741→                    <Label htmlFor="wiz-cp-model">Model</Label>
+   742→   742→                    <Input
+   743→   743→                      id="wiz-cp-model"
+   744→   744→                      value={cpModel}
+   745→   745→                      onChange={(e) => setCpModel(e.target.value)}
+   746→   746→                      placeholder={cpProviderDef.modelPlaceholder ?? 'mis. gpt-4o-mini'}
+   747→   747→                      disabled={cpIsDefault}
+   748→   748→                      maxLength={120}
+   749→   749→                      autoComplete="off"
+   750→   750→                    />
+   751→   751→                    <p className="text-[11px] text-muted-foreground">
+   752→   752→                      {cpIsDefault
+   753→   753→                        ? 'Mesin bawaan memilih model otomatis.'
+   754→   754→                        : 'Nama model persis seperti di dokumentasi provider.'}
+   755→   755→                    </p>
+   756→   756→                  </div>
+   757→   757→
+   758→   758→                  <div className="relative space-y-1.5 sm:col-span-2">
+   759→   759→                    <Label htmlFor="wiz-cp-key">API Key</Label>
+   760→   760→                    <Input
+   761→   761→                      id="wiz-cp-key"
+   762→   762→                      type="password"
+   763→   763→                      value={cpKey}
+   764→   764→                      onChange={(e) => setCpKey(e.target.value)}
+   765→   765→                      placeholder={cpKeyPlaceholder}
+   766→   766→                      disabled={cpIsDefault}
+   767→   767→                      maxLength={500}
+   768→   768→                      autoComplete="new-password"
+   769→   769→                      className="pr-10 font-mono text-xs"
+   770→   770→                    />
+   771→   771→                    <button
+   772→   772→                      type="button"
+   773→   773→                      onClick={() => setShowPw((v) => !v)}
+   774→   774→                      aria-label={showPw ? 'Sembunyikan API key' : 'Tampilkan API key'}
+   775→   775→                      className="absolute right-2 top-[30px] rounded p-1 text-muted-foreground hover:text-foreground"
+   776→   776→                    >
+   777→   777→                      {showPw ? (
+   778→   778→                        <EyeOff className="h-4 w-4" aria-hidden="true" />
+   779→   779→                      ) : (
+   780→   780→                        <Eye className="h-4 w-4" aria-hidden="true" />
+   781→   781→                      )}
+   782→   782→                    </button>
+   783→   783→                    <p className="text-[11px] text-muted-foreground">
+   784→   784→                      {cpIsDefault
+   785→   785→                        ? 'Mesin bawaan tidak memerlukan API key.'
+   786→   786→                        : copilotQuery.data?.hasApiKey
+   787→   787→                          ? 'Key tersimpan aman — biarkan kosong bila tidak ingin mengganti.'
+   788→   788→                          : `${cpProviderDef.requiresKey ? 'Wajib diisi. ' : 'Opsional. '}${cpProviderDef.keyHint}.`}
+   789→   789→                    </p>
+   790→   790→                  </div>
+   791→   791→
+   792→   792→                  <div className="space-y-1.5 sm:col-span-2">
+   793→   793→                    <Label htmlFor="wiz-cp-base">Base URL</Label>
+   794→   794→                    <Input
+   795→   795→                      id="wiz-cp-base"
+   796→   796→                      value={cpBase}
+   797→   797→                      onChange={(e) => setCpBase(e.target.value)}
+   798→   798→                      placeholder={cpProviderDef.baseUrl || 'https://provider-anda.example/v1'}
+   799→   799→                      disabled={cpIsDefault}
+   800→   800→                      maxLength={300}
+   801→   801→                      autoComplete="off"
+   802→   802→                      className="font-mono text-xs"
+   803→   803→                    />
+   804→   804→                    <p className="text-[11px] text-muted-foreground">
+   805→   805→                      Endpoint OpenAI-Compatible (…/chat/completions ditambahkan otomatis).
+   806→   806→                    </p>
+   807→   807→                  </div>
+   808→   808→                </div>
+   809→   809→              )}
+   810→   810→
+   811→   811→              <div className="mt-3 flex flex-wrap items-center gap-2">
+   812→   812→                <Button
+   813→   813→                  variant="outline"
+   814→   814→                  size="sm"
+   815→   815→                  onClick={testCopilot}
+   816→   816→                  disabled={cpTesting || copilotQuery.isLoading || (!cpIsDefault && !cpModel.trim())}
+   817→   817→                >
+   818→   818→                  {cpTesting ? (
+   819→   819→                    <>
+   820→   820→                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Menguji…
+   821→   821→                    </>
+   822→   822→                  ) : (
+   823→   823→                    <>
+   824→   824→                      <PlugZap className="h-4 w-4" aria-hidden="true" /> Uji Koneksi
+   825→   825→                    </>
+   826→   826→                  )}
+   827→   827→                </Button>
+   828→   828→              </div>
+   829→   829→
+   830→   830→              {cpTest && (
+   831→   831→                <p
+   832→   832→                  role="status"
+   833→   833→                  className={`mt-3 rounded-md border p-3 text-xs ${
+   834→   834→                    cpTest.ok
+   835→   835→                      ? 'border-green-300 bg-green-50 text-green-800'
+   836→   836→                      : 'border-red-300 bg-red-50 text-red-700'
+   837→   837→                  }`}
+   838→   838→                >
+   839→   839→                  {cpTest.message}
+   840→   840→                </p>
+   841→   841→              )}
+   842→   842→            </div>
+   843→   843→          )}
+   844→   844→
+   845→   845→          {/* ===== Langkah 4: Selesai ===== */}
+   846→   846→          {step === 4 && (
+   847→   847→            <div>
+   848→   848→              <div className="mb-4 flex items-start gap-3">
+   849→   849→                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+   850→   850→                  <CheckCircle2 className="h-6 w-6" aria-hidden="true" />
+   851→   851→                </span>
+   852→   852→                <div>
+   853→   853→                  <h3 className="text-sm font-bold text-foreground">Konfigurasi Selesai</h3>
+   854→   854→                  <p className="mt-0.5 text-xs text-muted-foreground">
+   855→   855→                    Berikut ringkasan konfigurasi dashboard Anda. Anda tetap dapat
+   856→   856→                    mengubah semuanya nanti lewat menu Pengaturan Aplikasi.
+   857→   857→                  </p>
+   858→   858→                </div>
+   859→   859→              </div>
+   860→   860→
+   861→   861→              {statusQuery.isFetching && !status ? (
+   862→   862→                <div className="space-y-2">
+   863→   863→                  <Skeleton className="h-12 w-full" />
+   864→   864→                  <Skeleton className="h-12 w-full" />
+   865→   865→                  <Skeleton className="h-12 w-full" />
+   866→   866→                </div>
+   867→   867→              ) : (
+   868→   868→                <ul className="space-y-2" aria-label="Ringkasan konfigurasi">
+   869→   869→                  <StatusRow
+   870→   870→                    icon={checks?.identityConfigured ? <CheckCircle2 className="h-5 w-5" /> : <Building2 className="h-5 w-5" />}
+   871→   871→                    tone={checks?.identityConfigured ? 'ok' : 'warn'}
+   872→   872→                    label="Identitas Dashboard"
+   873→   873→                    desc={
+   874→   874→                      checks?.identityConfigured
+   875→   875→                        ? `${settingsQuery.data?.appTitle ?? '—'} · ${settingsQuery.data?.govName ?? '—'}`
+   876→   876→                        : 'Masih nilai bawaan — ubah lewat Pengaturan Aplikasi.'
+   877→   877→                    }
+   878→   878→                  />
+   879→   879→                  <StatusRow
+   880→   880→                    icon={checks?.passwordDefault ? <ShieldAlert className="h-5 w-5" /> : <ShieldCheck className="h-5 w-5" />}
+   881→   881→                    tone={checks?.passwordDefault ? 'warn' : 'ok'}
+   882→   882→                    label="Keamanan Akun Admin"
+   883→   883→                    desc={
+   884→   884→                      checks?.passwordDefault
+   885→   885→                        ? 'Masih memakai password bawaan admin123 — segera ganti lewat langkah Keamanan.'
+   886→   886→                        : `Password akun ${status?.username ?? 'admin'} sudah diganti dari bawaan.`
+   887→   887→                    }
+   888→   888→                  />
+   889→   889→                  <StatusRow
+   890→   890→                    icon={<Bot className="h-5 w-5" />}
+   891→   891→                    tone={checks?.copilotConfigured ? 'ok' : 'muted'}
+   892→   892→                    label="AI Copilot"
+   893→   893→                    badge="Opsional"
+   894→   894→                    desc={
+   895→   895→                      checks?.copilotConfigured
+   896→   896→                        ? `Provider kustom: ${copilotQuery.data?.providerLabel ?? '—'}`
+   897→   897→                        : 'Mesin bawaan Z.ai aktif — berfungsi penuh tanpa konfigurasi.'
+   898→   898→                    }
+   899→   899→                  />
+   900→   900→                </ul>
+   901→   901→              )}
+   902→   902→
+   903→   903→              <p className="mt-4 rounded-md border bg-muted/40 p-3 text-xs text-muted-foreground">
+   904→   904→                Langkah lanjutan yang bisa dilakukan kapan saja: impor LRA dari PDF
+   905→   905→                (menu <span className="font-semibold">Import LRA</span>), kelola data
+   906→   906→                OPD/SKPD dan akun pengguna (menu <span className="font-semibold">Admin</span>),
+   907→   907→                atau unggah logo &amp; favicon (menu <span className="font-semibold">Pengaturan</span>).
+   908→   908→              </p>
+   909→   909→
+   910→   910→              {status?.completed && status.completedAt && (
+   911→   911→                <p className="mt-3 text-[11px] text-muted-foreground">
+   912→   912→                  Catatan: setup sebelumnya sudah ditandai selesai pada{' '}
+   913→   913→                  {formatDateID(new Date(status.completedAt))}.
+   914→   914→                </p>
+   915→   915→              )}
+   916→   916→            </div>
+   917→   917→          )}
+   918→   918→        </div>
+   919→   919→
+   920→   920→        {/* Navigasi */}
+   921→   921→        <div className="flex flex-wrap items-center justify-between gap-2 border-t bg-muted/30 px-5 py-3">
+   922→   922→          <p className="order-2 w-full text-center text-xs text-muted-foreground sm:order-1 sm:w-auto sm:text-left">
+   923→   923→            Langkah {step + 1} dari {STEPS.length} — {STEPS[step].label}
+   924→   924→          </p>
+   925→   925→          <div className="order-1 flex w-full flex-col-reverse gap-2 sm:order-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
+   926→   926→            {step > 0 && (
+   927→   927→              <Button variant="outline" size="sm" onClick={() => setStep((s) => Math.max(0, s - 1))} disabled={step === 0}>
+   928→   928→                <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Kembali
+   929→   929→              </Button>
+   930→   930→            )}
+   931→   931→            {secondaryAction && (
+   932→   932→              <Button variant="ghost" size="sm" onClick={secondaryAction.onClick}>
+   933→   933→                {secondaryAction.label}
+   934→   934→              </Button>
+   935→   935→            )}
+   936→   936→            <Button
+   937→   937→              size="sm"
+   938→   938→              onClick={primaryAction.onClick}
+   939→   939→              disabled={primaryAction.disabled}
+   940→   940→              className="bg-[#17408b] text-white hover:bg-[#12326e]"
+   941→   941→            >
+   942→   942→              {primaryAction.icon} {primaryAction.label}
+   943→   943→            </Button>
+   944→   944→          </div>
+   945→   945→        </div>
+   946→   946→      </DialogContent>
+   947→   947→    </Dialog>
+   948→   948→  )
+   949→   949→}
+   950→   950→
+   951→   951→/** Baris status dengan ikon + label + deskripsi (dipakai langkah Pengantar & Selesai). */
+   952→   952→function StatusRow({
+   953→   953→  icon,
+   954→   954→  tone,
+   955→   955→  label,
+   956→   956→  desc,
+   957→   957→  badge,
+   958→   958→}: {
+   959→   959→  icon: React.ReactNode
+   960→   960→  tone: 'ok' | 'warn' | 'muted'
+   961→   961→  label: string
+   962→   962→  desc: string
+   963→   963→  badge?: string
+   964→   964→}) {
+   965→   965→  const toneClass =
+   966→   966→    tone === 'ok'
+   967→   967→      ? 'border-emerald-200 bg-emerald-50'
+   968→   968→      : tone === 'warn'
+   969→   969→        ? 'border-amber-200 bg-amber-50'
+   970→   970→        : 'border-border bg-muted/40'
+   971→   971→  const iconClass =
+   972→   972→    tone === 'ok' ? 'text-emerald-700' : tone === 'warn' ? 'text-amber-600' : 'text-muted-foreground'
+   973→   973→
+   974→   974→  return (
+   975→   975→    <li className={`flex items-start gap-3 rounded-md border p-3 ${toneClass}`}>
+   976→   976→      <span className={`mt-0.5 shrink-0 ${iconClass}`}>{icon}</span>
+   977→   977→      <div className="min-w-0">
+   978→   978→        <p className="flex flex-wrap items-center gap-2 text-xs font-bold text-foreground">
+   979→   979→          {label}
+   980→   980→          {badge && (
+   981→   981→            <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+   982→   982→              {badge}
+   983→   983→            </span>
+   984→   984→          )}
+   985→   985→        </p>
+   986→   986→        <p className="mt-0.5 text-xs text-muted-foreground">{desc}</p>
+   987→   987→      </div>
+   988→   988→    </li>
+   989→   989→  )
+   990→   990→}
+   991→   991→

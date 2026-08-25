@@ -28,6 +28,17 @@ export async function POST(req: Request) {
       include: { opd: true },
     })
     if (!user || !verifyPassword(password, user.passwordHash)) {
+      // Belum ada akun sama sekali → arahkan ke Setup Wizard first-run
+      const totalUsers = await db.adminUser.count()
+      if (totalUsers === 0) {
+        return NextResponse.json(
+          {
+            error:
+              'Belum ada akun pengguna. Setup Wizard akan terbuka otomatis di halaman utama untuk membuat akun admin pertama.',
+          },
+          { status: 403 },
+        )
+      }
       return NextResponse.json({ error: 'Username atau password salah' }, { status: 401 })
     }
 

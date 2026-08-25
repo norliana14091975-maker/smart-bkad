@@ -29,9 +29,11 @@ import { OpdImportSection } from '@/components/dashboard/sections/opd-import-sec
 import { LoginDialog } from '@/components/dashboard/admin/login-dialog'
 import { AdminGuard } from '@/components/dashboard/admin/admin-guard'
 import { SetupWizard } from '@/components/dashboard/setup-wizard'
+import { FirstRunSetup } from '@/components/dashboard/first-run-setup'
+import { useQueryClient } from '@tanstack/react-query'
 import { useSettings } from '@/hooks/use-settings'
 import { DEFAULT_SETTINGS } from '@/lib/default-settings'
-import type { AuthUserDto, SetupWizardStatusDto } from '@/types/budget'
+import type { AuthUserDto, FirstRunStatusDto, SetupWizardStatusDto } from '@/types/budget'
 
 const SECTION_META: Record<
   SectionId,
@@ -81,10 +83,15 @@ const EXECUTIVE_ROLE: AuthUserDto['role'][] = ['admin', 'kepala_daerah']
 const OPD_SECTIONS: SectionId[] = ['opd-dashboard', 'opd-import']
 
 export default function Home() {
+  const queryClient = useQueryClient()
   const [section, setSection] = useState<SectionId>('apbd')
   const [mobileOpen, setMobileOpen] = useState(false)
   const [user, setUser] = useState<AuthUserDto | null>(null)
   const [loginOpen, setLoginOpen] = useState(false)
+
+  // Setup Wizard first-run — true bila aplikasi belum punya akun admin
+  // (instalasi baru): wizard layar penuh WAJIB dijalankan sebelum semuanya.
+  const [firstRunNeeded, setFirstRunNeeded] = useState<boolean | null>(null)
 
   // Setup Wizard — terbuka otomatis saat login admin bila belum pernah selesai
   const [wizardOpen, setWizardOpen] = useState(false)
@@ -109,6 +116,24 @@ export default function Home() {
         if (!cancelled && data) setUser(data)
       })
       .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // Cek status Setup Wizard first-run saat halaman dimuat (aplikasi baru?
+  // belum ada akun admin sama sekali → tampilkan wizard inisialisasi)
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/setup/status')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        const data = (json as { data?: FirstRunStatusDto } | null)?.data
+        if (!cancelled) setFirstRunNeeded(!!data?.needed)
+      })
+      .catch(() => {
+        if (!cancelled) setFirstRunNeeded(false)
+      })
     return () => {
       cancelled = true
     }
@@ -184,6 +209,18 @@ export default function Home() {
     // izinkan wizard dicek ulang pada login admin berikutnya
     wizardAutoChecked.current = false
     handleSelect('apbd')
+  }
+
+  /** Setup first-run selesai: akun admin dibuat & auto-login. */
+  const handleFirstRunFinished = (u: AuthUserDto) => {
+    setFirstRunNeeded(false)
+    setUser(u)
+    wizardAutoChecked.current = false
+    // Identitas/copilot mungkin berubah lewat wizard → segarkan cache
+    queryClient.invalidateQueries({ queryKey: ['settings'] })
+    queryClient.invalidateQueries({ queryKey: ['setup-wizard-status'] })
+    queryClient.invalidateQueries({ queryKey: ['copilot-settings'] })
+    handleSelect('admin-overview')
   }
 
   const isAdminSection = user?.role === 'admin' && ADMIN_SECTIONS.includes(section)
@@ -278,6 +315,11 @@ export default function Home() {
       </div>
 
       <LoginDialog open={loginOpen} onOpenChange={setLoginOpen} onSuccess={handleLoginSuccess} />
+
+      {/* Setup Wizard first-run — wajib saat aplikasi belum punya akun admin */}
+      {firstRunNeeded === true && (
+        <FirstRunSetup appTitle={settings.appTitle} onFinished={handleFirstRunFinished} />
+      )}
 
       {/* Setup Wizard — khusus admin */}
       {user?.role === 'admin' && (

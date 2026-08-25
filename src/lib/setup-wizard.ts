@@ -1,41 +1,57 @@
 import { db } from '@/lib/db'
-import { verifyPassword, type AdminUserPayload } from '@/lib/auth'
+import type { AdminUserPayload } from '@/lib/auth'
 import { getSettings } from '@/lib/settings'
-import { DEFAULT_SETTINGS } from '@/lib/default-settings'
 import { getCopilotConfig } from '@/lib/copilot-config'
 import type { SetupWizardStatusDto } from '@/types/budget'
 
 /**
  * Setup Wizard — status konfigurasi awal aplikasi (server-side).
- * Penanda "selesai" disimpan di tabel app_setting sehingga wizard hanya
- * terbuka otomatis sekali (dapat dijalankan ulang kapan saja dari Pengaturan).
+ *
+ * Dua mode wizard:
+ * 1. FIRST-RUN (inisialisasi): aplikasi dijalankan pertama kali dan belum
+ *    ada akun admin sama sekali → wizard layar-penuh membuat akun admin
+ *    pertama + konfigurasi dasar (tanpa akun bawaan demi keamanan).
+ * 2. PANDUAN ADMIN: dialog opsional setelah login admin — dapat dijalankan
+ *    ulang kapan saja dari kartu Setup Wizard di Pengaturan Aplikasi.
+ *
+ * Penanda "selesai" disimpan di tabel app_setting.
  */
 
 /** Key app_setting penanda setup selesai (nilai = ISO timestamp). */
 export const SETUP_WIZARD_KEY = 'setupWizardCompleted'
 
+/** Pola sisa data lama Provinsi DKI Jakarta pada identitas. */
+const DKI_LEGACY_RE = /dki|jakarta|bpkd/i
+
 /**
- * Hitung status Setup Wizard:
+ * Apakah aplikasi perlu menjalankan Setup Wizard first-run?
+ * True bila belum ada akun admin sama sekali (instalasi baru).
+ */
+export async function isFirstRunNeeded(): Promise<boolean> {
+  const count = await db.adminUser.count({ where: { role: 'admin' } })
+  return count === 0
+}
+
+/**
+ * Hitung status Setup Wizard (mode panduan admin):
  * - completed / completedAt — apakah admin pernah menandai setup selesai
- * - checks.identityConfigured — identitas (judul & nama pemda) sudah
- *   dikustomisasi dari nilai bawaan DKI
- * - checks.passwordDefault — akun admin yang menjalankan wizard masih
- *   memakai password bawaan "admin123" (true = perlu diganti)
+ * - checks.identityConfigured — identitas (judul & nama pemda) sudah aman
+ *   dipakai (terisi dan bukan sisa data lama DKI Jakarta)
  * - checks.copilotConfigured — AI Copilot memakai provider kustom
  *   (false = mesin bawaan Z.ai, tetap berfungsi tanpa konfigurasi)
  */
 export async function getSetupWizardStatus(admin: AdminUserPayload): Promise<SetupWizardStatusDto> {
-  const [settingRow, settings, copilot, adminRow] = await Promise.all([
+  const [settingRow, settings, copilot] = await Promise.all([
     db.appSetting.findUnique({ where: { key: SETUP_WIZARD_KEY } }),
     getSettings(),
     getCopilotConfig(),
-    db.adminUser.findUnique({ where: { id: admin.id }, select: { passwordHash: true } }),
   ])
 
   const identityConfigured =
-    settings.appTitle !== DEFAULT_SETTINGS.appTitle || settings.govName !== DEFAULT_SETTINGS.govName
-
-  const passwordDefault = adminRow ? verifyPassword('admin123', adminRow.passwordHash) : false
+    !!settings.appTitle?.trim() &&
+    !!settings.govName?.trim() &&
+    !DKI_LEGACY_RE.test(settings.appTitle) &&
+    !DKI_LEGACY_RE.test(settings.govName)
 
   return {
     completed: !!settingRow,
@@ -43,7 +59,6 @@ export async function getSetupWizardStatus(admin: AdminUserPayload): Promise<Set
     username: admin.username,
     checks: {
       identityConfigured,
-      passwordDefault,
       copilotConfigured: copilot.provider !== 'default',
     },
   }

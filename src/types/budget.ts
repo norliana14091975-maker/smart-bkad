@@ -258,13 +258,19 @@ export interface SetupWizardStatusDto {
   /** Username admin yang menjalankan wizard (untuk langkah keamanan) */
   username: string
   checks: {
-    /** Identitas dashboard (judul & nama pemda) sudah dikustomisasi */
+    /** Identitas dashboard (judul & nama pemda) terisi & bebas sisa data DKI lama */
     identityConfigured: boolean
-    /** Akun admin masih memakai password bawaan admin123 (true = perlu diganti) */
-    passwordDefault: boolean
     /** AI Copilot memakai provider kustom (false = mesin bawaan Z.ai) */
     copilotConfigured: boolean
   }
+}
+
+/** Status Setup Wizard first-run (publik, tanpa sesi). */
+export interface FirstRunStatusDto {
+  /** true bila belum ada akun admin → wizard inisialisasi harus dijalankan */
+  needed: boolean
+  /** Judul aplikasi saat ini (untuk header wizard) */
+  appTitle: string
 }
 
 // Data untuk Dashboard OPD (profil + realisasi SKPD miliknya)

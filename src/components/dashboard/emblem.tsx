@@ -2,8 +2,8 @@
  * Emblem & logo SVG buatan sendiri untuk tampilan dashboard keuangan daerah.
  */
 
-export function DkiEmblem({ className = 'h-8 w-8' }: { className?: string }) {
-  // Perisai sederhana dengan bintang — pengganti logo provinsi
+export function DaerahEmblem({ className = 'h-8 w-8' }: { className?: string }) {
+  // Perisai sederhana dengan bintang — lambang daerah
   return (
     <svg viewBox="0 0 48 48" className={className} aria-hidden="true" role="presentation">
       <path
@@ -21,10 +21,10 @@ export function DkiEmblem({ className = 'h-8 w-8' }: { className?: string }) {
   )
 }
 
-export function BpkdLogo({
+export function BrandLogo({
   className = '',
-  text = 'BPKD',
-  subtext = 'Provinsi DKI Jakarta',
+  text = 'PEMDA',
+  subtext = 'Kabupaten Seruyan',
 }: {
   className?: string
   text?: string
@@ -73,7 +73,7 @@ export function GoldEmblem({ className = 'h-24 w-24' }: { className?: string }) 
       </text>
       <text fill="#78350f" fontSize="13.5" fontWeight="700" letterSpacing="3.5">
         <textPath href="#emblem-arc-bottom" startOffset="50%" textAnchor="middle">
-          PEMPROV DKI JAKARTA
+          KABUPATEN SERUYAN
         </textPath>
       </text>
       {/* gedung */}

@@ -2,7 +2,7 @@
 
 import { Menu } from 'lucide-react'
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from '@/components/ui/breadcrumb'
-import { BpkdLogo, GoldEmblem } from '@/components/dashboard/emblem'
+import { BrandLogo, GoldEmblem } from '@/components/dashboard/emblem'
 import type { AppSettingsDto } from '@/types/budget'
 
 /**
@@ -48,7 +48,7 @@ export function HeaderBand({ settings }: { settings: AppSettingsDto }) {
             </div>
           </div>
         ) : (
-          <BpkdLogo text={settings.brandText} subtext={settings.brandSubtext} />
+          <BrandLogo text={settings.brandText} subtext={settings.brandSubtext} />
         )}
         {/* Logo pojok kanan: pengaturan khusus lencana, fallback emblem emas bawaan */}
         {settings.emblemUrl ? (
