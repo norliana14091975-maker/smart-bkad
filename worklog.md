@@ -391,3 +391,18 @@ Work Log:
 
 Stage Summary:
 - Aturan "realisasi 0 → anggaran 0" berlaku penuh: tanpa data LRA seluruh item anggaran (termasuk per-urusan) dan APBD tahun berjalan menampilkan 0 dengan badge amber penjelasan; setelah LRA diimport anggaran otomatis mengikuti data (per akun: terealisasi → murni baseline/LRA, tidak → 0; APBDP = anggaran LRA); APBD tetap menampilkan baris tahun berjalan (disintesis bila perlu) — tidak pernah kosong
+
+---
+Task ID: 20
+Agent: Z.ai Code (main)
+Task: Perbaiki Kelola Data APBD & Kelola Item Anggaran tidak muncul saat realisasi terisi + pendapatan/belanja/pembiayaan masih membaca APBDP bukan APBD murni
+
+Work Log:
+- Akar masalah 1 (DATA HILANG): budget_item tahun 2026 utk pendapatan/belanja(psi)/pembiayaan TERHAPUS dari database (tersisa hanya 2025 + 44 item urusan 2026) dan apbd_summary kosong — menyebabkan Kelola Item Anggaran & Kelola Data APBD kosong; dipulihkan langsung via SQL dari nilai seed baseline (52 baris budget_item 2026/2025 non-urusan + 5 baris apbd_summary 2022-2026) TANPA menyentuh data realisasi import (opd:4/323 baris tetap utuh)
+- Akar masalah 2 (RULE SALAH): implementasi Task 19 menolkan anggaran murni per akun saat realisasi 0 ("realisasi 0 → murni 0") sehingga saat LRA tersinkron kolom 2026 menampilkan 0/APBDP alih-alih murni; sesuai permintaan user: pendapatan/belanja/pembiayaan HARUS selalu menampilkan APBD murni → rule per-akun dihapus, syncTabItems saat tersinkon mengembalikan staticItems (murni baseline) apa adanya + apbdpItems terpisah
+- Aturan final yang berlaku: (1) tanpa data realisasi sama sekali → seluruh item & APBD = 0 (badge amber); (2) LRA tersinkon → item murni SELALU baseline, hasil import tampil di kolom APBDP terpisah; APBD publik: kolom APBD = murni baseline, APBDP = anggaran LRA
+- Verifikasi API: /api/pendapatan — 4.1.01 Murni 49.898.218.773.411 + APBDP "—" (tanpa LRA) + 2025 48T; 4.1.02 Murni 2.214.853.656.242 + APBDP 0; /api/belanja — 5.1.01 Murni 21.431.736.563.104 + APBDP 8.246.138.431; /api/apbd — 2026 APBD 71.450.673.065.697 + APBDP 963.491.487.150; admin/apbd 5 baris + admin/budget-items 6 item
+- Verifikasi browser: Kelola Data APBD menampilkan tabel 5 tahun (2026 | 71.450.673.065.697); Kelola Item Anggaran menampilkan item (5.1.01); Pendapatan/Belanja/Pembiayaan publik kolom "2026 Murni" dengan nilai baseline (49.898.218.773.411 / 21.431.736.563.104 / 5.052.674.866.043); APBD publik baris 2026 "71.450.673.065.697,00 | 963.491.487.150,00"; tanpa error console; lint bersih
+
+Stage Summary:
+- Kelola Data APBD & Kelola Item Anggaran kembali tampil (data murni baseline dipulihkan); Pendapatan/Belanja/Pembiayaan kini SELALU menampilkan APBD murni (baseline) di kolom utama — hasil import LRA hanya tampil di kolom APBDP terpisah; aturan realisasi-0 tetap berlaku hanya saat tidak ada LRA sama sekali (badge amber)

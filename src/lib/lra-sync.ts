@@ -209,17 +209,7 @@ export function syncTabItems(
     amount: r.anggaran,
   }))
 
-  // 2) Per akun: realisasi 0 / tidak ada di LRA → murni tahun berjalan = 0
-  const realisasiByCode = new Map<string, number>()
-  for (const r of sync.rows) {
-    realisasiByCode.set(r.code, (realisasiByCode.get(r.code) ?? 0) + r.realisasi)
-  }
-  const items = staticItems.map((it) => {
-    if (it.year !== currentYear) return it
-    const rea = realisasiByCode.get(it.code)
-    if (rea === undefined || rea === 0) return { ...it, amount: 0 }
-    return it
-  })
-
-  return { items, apbdpItems, synced: true }
+  // APBD murni SELALU dari baseline (tidak pernah diubah import LRA);
+  // hasil import tampil terpisah pada kolom APBDP (perubahan).
+  return { items: staticItems, apbdpItems, synced: true }
 }
