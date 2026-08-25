@@ -31,7 +31,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Username atau password salah' }, { status: 401 })
     }
 
-    // Akun OPD dinonaktifkan admin → tolak login
+    // Akun dinonaktifkan admin (Manajemen Pengguna) → tolak login
+    if (!user.active) {
+      return NextResponse.json(
+        { error: 'Akun ini dinonaktifkan. Hubungi admin.' },
+        { status: 403 },
+      )
+    }
+
+    // Akun OPD dengan OPD dinonaktifkan → tolak login
     if (user.role === 'opd' && user.opd && !user.opd.active) {
       return NextResponse.json(
         { error: 'Akun OPD ini dinonaktifkan. Hubungi admin.' },

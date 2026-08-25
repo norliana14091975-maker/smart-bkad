@@ -60,6 +60,13 @@ export async function getAdminUser(): Promise<AdminUserPayload | null> {
       return null
     }
 
+    // Akun dinonaktifkan admin (Manajemen Pengguna) → hapus semua sesinya
+    // dan anggap belum login
+    if (!session.user.active) {
+      await db.adminSession.deleteMany({ where: { userId: session.user.id } })
+      return null
+    }
+
     return {
       id: session.user.id,
       username: session.user.username,

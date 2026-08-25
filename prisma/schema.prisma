@@ -133,11 +133,14 @@ model Opd {
 }
 
 // Akun admin dashboard / akun login OPD
+// active = akun diaktifkan/dinonaktifkan admin lewat Manajemen Pengguna;
+// akun nonaktif tidak bisa login dan sesinya dihapus.
 model AdminUser {
   id           String         @id @default(cuid())
   username     String         @unique
   passwordHash String         @map("password_hash")
-  role         String         @default("admin") // admin | opd
+  role         String         @default("admin") // admin | opd | kepala_daerah
+  active       Boolean        @default(true)
   opdId        Int?           @unique @map("opd_id")
   opd          Opd?           @relation(fields: [opdId], references: [id], onDelete: Cascade)
   createdAt    DateTime       @default(now())

@@ -203,6 +203,32 @@ export interface OpdCredentialsDto {
   password: string
 }
 
+// ---------------------------------------------------------------------------
+// Tipe untuk Manajemen Pengguna (admin)
+// ---------------------------------------------------------------------------
+
+/** Baris akun pengguna untuk tabel Manajemen Pengguna */
+export interface UserRowDto {
+  id: string
+  username: string
+  role: 'admin' | 'kepala_daerah' | 'opd'
+  /** Nama OPD terkait (hanya untuk role opd) */
+  opdName: string | null
+  /** true bila akun aktif; akun nonaktif tidak bisa login */
+  active: boolean
+  /** true bila akun milik OPD yang dinonaktifkan di Data OPD */
+  opdActive: boolean | null
+  /** Jumlah sesi login yang masih berlaku */
+  sessionCount: number
+  createdAt: string
+}
+
+/** Kredensial pengguna yang baru dibuat/reset (password hanya tampil sekali) */
+export interface UserCredentialsDto {
+  username: string
+  password: string
+}
+
 // Data untuk Dashboard OPD (profil + realisasi SKPD miliknya)
 export interface RealisasiGroupDto {
   pendapatan: { anggaran: number; realisasi: number }

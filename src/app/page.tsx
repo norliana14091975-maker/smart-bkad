@@ -20,6 +20,7 @@ import { AdminImportSection } from '@/components/dashboard/sections/admin-import
 import { AdminTransparansiSection } from '@/components/dashboard/sections/admin-transparansi-section'
 import { AdminSettingsSection } from '@/components/dashboard/sections/admin-settings-section'
 import { AdminOpdSection } from '@/components/dashboard/sections/admin-opd-section'
+import { AdminUsersSection } from '@/components/dashboard/sections/admin-users-section'
 import { ExecutiveSummarySection } from '@/components/dashboard/sections/executive-summary-section'
 import { RiskAnalysisSection } from '@/components/dashboard/sections/risk-analysis-section'
 import { CopilotWidget } from '@/components/dashboard/copilot-widget'
@@ -53,6 +54,7 @@ const SECTION_META: Record<
   'admin-transparansi': { title: 'Kelola Dokumen Transparansi', breadcrumbHome: 'Admin', breadcrumbCurrent: 'Transparansi' },
   'admin-settings': { title: 'Pengaturan Aplikasi', breadcrumbHome: 'Admin', breadcrumbCurrent: 'Pengaturan' },
   'admin-opd': { title: 'Kelola Data OPD/SKPD', breadcrumbHome: 'Admin', breadcrumbCurrent: 'Data OPD' },
+  'admin-users': { title: 'Manajemen Pengguna', breadcrumbHome: 'Admin', breadcrumbCurrent: 'Pengguna' },
   'opd-dashboard': { title: 'Dashboard OPD', breadcrumbHome: 'OPD', breadcrumbCurrent: 'Dashboard OPD' },
   'opd-import': { title: 'Import LRA dari PDF', breadcrumbHome: 'OPD', breadcrumbCurrent: 'Import LRA' },
 }
@@ -66,6 +68,7 @@ const ADMIN_SECTIONS: SectionId[] = [
   'admin-transparansi',
   'admin-settings',
   'admin-opd',
+  'admin-users',
 ]
 
 /** Section Analisis & AI — hanya admin penuh & Kepala Daerah. */
@@ -235,8 +238,9 @@ export default function Home() {
                 {section === 'admin-realisasi' && <AdminRealisasiSection />}
                 {section === 'admin-import' && <AdminImportSection />}
                 {section === 'admin-transparansi' && <AdminTransparansiSection />}
-                {section === 'admin-settings' && <AdminSettingsSection />}
+                { section === 'admin-settings' && <AdminSettingsSection /> }
                 {section === 'admin-opd' && <AdminOpdSection />}
+                {section === 'admin-users' && <AdminUsersSection currentUser={user} />}
               </AdminGuard>
             )}
 

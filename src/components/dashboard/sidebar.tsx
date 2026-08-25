@@ -39,6 +39,7 @@ export type SectionId =
   | 'admin-transparansi'
   | 'admin-settings'
   | 'admin-opd'
+  | 'admin-users'
   | 'opd-dashboard'
   | 'opd-import'
 
@@ -97,6 +98,7 @@ const ADMIN_NAV: NavGroup = {
     { id: 'admin-realisasi', label: 'Data Realisasi' },
     { id: 'admin-import', label: 'Import LRA (PDF)' },
     { id: 'admin-opd', label: 'Data OPD/SKPD' },
+    { id: 'admin-users', label: 'Manajemen Pengguna' },
     { id: 'admin-transparansi', label: 'Dokumen Transparansi' },
     { id: 'admin-settings', label: 'Pengaturan Aplikasi' },
   ],
