@@ -245,6 +245,28 @@ export interface CopilotSettingsDto {
   requiresKey: boolean
 }
 
+// ---------------------------------------------------------------------------
+// Tipe untuk Setup Wizard (admin)
+// ---------------------------------------------------------------------------
+
+/** Status Setup Wizard — hasil pemeriksaan konfigurasi awal aplikasi. */
+export interface SetupWizardStatusDto {
+  /** true bila admin pernah menandai setup selesai */
+  completed: boolean
+  /** ISO timestamp saat setup ditandai selesai (null bila belum) */
+  completedAt: string | null
+  /** Username admin yang menjalankan wizard (untuk langkah keamanan) */
+  username: string
+  checks: {
+    /** Identitas dashboard (judul & nama pemda) sudah dikustomisasi */
+    identityConfigured: boolean
+    /** Akun admin masih memakai password bawaan admin123 (true = perlu diganti) */
+    passwordDefault: boolean
+    /** AI Copilot memakai provider kustom (false = mesin bawaan Z.ai) */
+    copilotConfigured: boolean
+  }
+}
+
 // Data untuk Dashboard OPD (profil + realisasi SKPD miliknya)
 export interface RealisasiGroupDto {
   pendapatan: { anggaran: number; realisasi: number }

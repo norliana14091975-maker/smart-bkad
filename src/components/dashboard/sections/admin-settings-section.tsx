@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Bot, Eye, EyeOff, Loader2, PlugZap, RotateCcw, Save, Trash2, Upload } from 'lucide-react'
+import { Bot, Eye, EyeOff, Loader2, PlugZap, RotateCcw, Save, Trash2, Upload, Wand2 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { useSettings } from '@/hooks/use-settings'
 import { Button } from '@/components/ui/button'
@@ -28,7 +28,9 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { DkiEmblem, GoldEmblem } from '@/components/dashboard/emblem'
+import { useSetupWizardStatus } from '@/components/dashboard/setup-wizard'
 import { COPILOT_PROVIDERS, findCopilotProvider } from '@/lib/copilot-providers'
+import { formatDateID } from '@/lib/format'
 import { DEFAULT_SETTINGS } from '@/lib/default-settings'
 import type { AppSettingsDto, CopilotSettingsDto } from '@/types/budget'
 
@@ -112,10 +114,16 @@ const TEXT_FIELDS: {
   },
 ]
 
-export function AdminSettingsSection() {
+interface AdminSettingsSectionProps {
+  /** Membuka Setup Wizard (dipasang oleh halaman utama). */
+  onOpenWizard?: () => void
+}
+
+export function AdminSettingsSection({ onOpenWizard }: AdminSettingsSectionProps) {
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const { data, isLoading } = useSettings()
+  const wizardStatus = useSetupWizardStatus()
 
   // draf perubahan teks; nilai efektif = draf > data > bawaan
   const [draft, setDraft] = useState<Partial<Record<TextKey, string>>>({})
@@ -399,6 +407,43 @@ export function AdminSettingsSection() {
       <h2 className="mb-4 text-base font-bold uppercase tracking-wide text-foreground">
         Pengaturan Aplikasi
       </h2>
+
+      {/* Setup Wizard */}
+      <section className="mb-5 rounded-lg border bg-card p-4 shadow-sm sm:p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="mb-1 flex flex-wrap items-center gap-2">
+              <h3 className="text-sm font-bold uppercase tracking-wide text-foreground/80">
+                Setup Wizard
+              </h3>
+              {wizardStatus.data?.completed ? (
+                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                  <Wand2 className="h-3 w-3" aria-hidden="true" /> Selesai
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                  <Wand2 className="h-3 w-3" aria-hidden="true" /> Belum selesai
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Panduan berlangkah untuk konfigurasi awal: identitas dashboard, keamanan
+              akun admin, dan AI Copilot.{' '}
+              {wizardStatus.data?.completedAt
+                ? `Setup terakhir ditandai selesai pada ${formatDateID(new Date(wizardStatus.data.completedAt))}.`
+                : 'Jalankan sekali saat pertama memakai aplikasi.'}
+            </p>
+          </div>
+          <Button
+            onClick={() => onOpenWizard?.()}
+            disabled={!onOpenWizard}
+            size="sm"
+            className="shrink-0 bg-[#17408b] text-white hover:bg-[#12326e]"
+          >
+            <Wand2 className="h-4 w-4" aria-hidden="true" /> Jalankan Setup Wizard
+          </Button>
+        </div>
+      </section>
 
       {/* Identitas aplikasi */}
       <section className="mb-5 rounded-lg border bg-card p-4 shadow-sm sm:p-5">

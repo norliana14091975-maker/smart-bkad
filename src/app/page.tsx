@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { HeaderBand, PageHeader } from '@/components/dashboard/header'
 import { SidebarNav, type SectionId } from '@/components/dashboard/sidebar'
@@ -28,9 +28,10 @@ import { OpdDashboardSection } from '@/components/dashboard/sections/opd-dashboa
 import { OpdImportSection } from '@/components/dashboard/sections/opd-import-section'
 import { LoginDialog } from '@/components/dashboard/admin/login-dialog'
 import { AdminGuard } from '@/components/dashboard/admin/admin-guard'
+import { SetupWizard } from '@/components/dashboard/setup-wizard'
 import { useSettings } from '@/hooks/use-settings'
 import { DEFAULT_SETTINGS } from '@/lib/default-settings'
-import type { AuthUserDto } from '@/types/budget'
+import type { AuthUserDto, SetupWizardStatusDto } from '@/types/budget'
 
 const SECTION_META: Record<
   SectionId,
@@ -85,6 +86,10 @@ export default function Home() {
   const [user, setUser] = useState<AuthUserDto | null>(null)
   const [loginOpen, setLoginOpen] = useState(false)
 
+  // Setup Wizard — terbuka otomatis saat login admin bila belum pernah selesai
+  const [wizardOpen, setWizardOpen] = useState(false)
+  const wizardAutoChecked = useRef(false)
+
   // Pengaturan aplikasi (nama, logo, favicon, teks) — gabung dengan bawaan
   const settingsQuery = useSettings()
   const settings = useMemo(
@@ -108,6 +113,23 @@ export default function Home() {
       cancelled = true
     }
   }, [])
+
+  // Cek status Setup Wizard setelah admin login (sekali per sesi halaman)
+  useEffect(() => {
+    if (user?.role !== 'admin' || wizardAutoChecked.current) return
+    wizardAutoChecked.current = true
+    let cancelled = false
+    fetch('/api/admin/setup-wizard')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        const data = (json as { data?: SetupWizardStatusDto } | null)?.data
+        if (!cancelled && data && !data.completed) setWizardOpen(true)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [user?.role])
 
   // Judul tab browser mengikuti pengaturan
   useEffect(() => {
@@ -158,6 +180,9 @@ export default function Home() {
       // abaikan kegagalan jaringan
     }
     setUser(null)
+    setWizardOpen(false)
+    // izinkan wizard dicek ulang pada login admin berikutnya
+    wizardAutoChecked.current = false
     handleSelect('apbd')
   }
 
@@ -238,7 +263,7 @@ export default function Home() {
                 {section === 'admin-realisasi' && <AdminRealisasiSection />}
                 {section === 'admin-import' && <AdminImportSection />}
                 {section === 'admin-transparansi' && <AdminTransparansiSection />}
-                { section === 'admin-settings' && <AdminSettingsSection /> }
+                { section === 'admin-settings' && <AdminSettingsSection onOpenWizard={() => setWizardOpen(true)} /> }
                 {section === 'admin-opd' && <AdminOpdSection />}
                 {section === 'admin-users' && <AdminUsersSection currentUser={user} />}
               </AdminGuard>
@@ -253,6 +278,11 @@ export default function Home() {
       </div>
 
       <LoginDialog open={loginOpen} onOpenChange={setLoginOpen} onSuccess={handleLoginSuccess} />
+
+      {/* Setup Wizard — khusus admin */}
+      {user?.role === 'admin' && (
+        <SetupWizard open={wizardOpen} onOpenChange={setWizardOpen} />
+      )}
 
       {/* AI Copilot — hanya admin & Kepala Daerah */}
       {copilotVisible && <CopilotWidget />}

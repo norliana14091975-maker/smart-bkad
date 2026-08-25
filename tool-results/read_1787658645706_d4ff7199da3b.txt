@@ -1,0 +1,1019 @@
+     1→     1→'use client'
+     2→     2→
+     3→     3→import { useEffect, useRef, useState } from 'react'
+     4→     4→import { useQuery, useQueryClient } from '@tanstack/react-query'
+     5→     5→import { Bot, Eye, EyeOff, Loader2, PlugZap, RotateCcw, Save, Trash2, Upload } from 'lucide-react'
+     6→     6→import { useToast } from '@/hooks/use-toast'
+     7→     7→import { useSettings } from '@/hooks/use-settings'
+     8→     8→import { Button } from '@/components/ui/button'
+     9→     9→import {
+    10→    10→  AlertDialog,
+    11→    11→  AlertDialogAction,
+    12→    12→  AlertDialogCancel,
+    13→    13→  AlertDialogContent,
+    14→    14→  AlertDialogDescription,
+    15→    15→  AlertDialogFooter,
+    16→    16→  AlertDialogHeader,
+    17→    17→  AlertDialogTitle,
+    18→    18→} from '@/components/ui/alert-dialog'
+    19→    19→import { Input } from '@/components/ui/input'
+    20→    20→import { Label } from '@/components/ui/label'
+    21→    21→import {
+    22→    22→  Select,
+    23→    23→  SelectContent,
+    24→    24→  SelectItem,
+    25→    25→  SelectTrigger,
+    26→    26→  SelectValue,
+    27→    27→} from '@/components/ui/select'
+    28→    28→import { Skeleton } from '@/components/ui/skeleton'
+    29→    29→import { Textarea } from '@/components/ui/textarea'
+    30→    30→import { DkiEmblem, GoldEmblem } from '@/components/dashboard/emblem'
+    31→    31→import { COPILOT_PROVIDERS, findCopilotProvider } from '@/lib/copilot-providers'
+    32→    32→import { DEFAULT_SETTINGS } from '@/lib/default-settings'
+    33→    33→import type { AppSettingsDto, CopilotSettingsDto } from '@/types/budget'
+    34→    34→
+    35→    35→type TextKey =
+    36→    36→  | 'appName'
+    37→    37→  | 'appTitle'
+    38→    38→  | 'appDescription'
+    39→    39→  | 'govName'
+    40→    40→  | 'brandText'
+    41→    41→  | 'brandSubtext'
+    42→    42→  | 'footerText'
+    43→    43→
+    44→    44→/** Pilihan warna header populer untuk pemerintahan daerah */
+    45→    45→const PRESET_HEADER_COLORS = [
+    46→    46→  '#17408b', // biru laut (bawaan)
+    47→    47→  '#1d4ed8', // biru cerah
+    48→    48→  '#0f766e', // teal
+    49→    49→  '#15803d', // hijau
+    50→    50→  '#b45309', // oranye keemasan
+    51→    51→  '#b91c1c', // merah marun
+    52→    52→  '#581c87', // ungu tua
+    53→    53→  '#374151', // abu gelap
+    54→    54→]
+    55→    55→
+    56→    56→const TEXT_FIELDS: {
+    57→    57→  key: TextKey
+    58→    58→  label: string
+    59→    59→  placeholder: string
+    60→    60→  max: number
+    61→    61→  textarea?: boolean
+    62→    62→  hint?: string
+    63→    63→}[] = [
+    64→    64→  {
+    65→    65→    key: 'appName',
+    66→    66→    label: 'Nama Aplikasi',
+    67→    67→    placeholder: 'DASHBOARD',
+    68→    68→    max: 40,
+    69→    69→    hint: 'Tampil sebagai teks brand di sidebar.',
+    70→    70→  },
+    71→    71→  {
+    72→    72→    key: 'appTitle',
+    73→    73→    label: 'Judul Halaman',
+    74→    74→    placeholder: 'Dashboard Keuangan DKI',
+    75→    75→    max: 100,
+    76→    76→    hint: 'Tampil pada tab/judul browser.',
+    77→    77→  },
+    78→    78→  {
+    79→    79→    key: 'appDescription',
+    80→    80→    label: 'Deskripsi Aplikasi',
+    81→    81→    placeholder: 'Dashboard monitoring pengelolaan keuangan daerah…',
+    82→    82→    max: 300,
+    83→    83→    textarea: true,
+    84→    84→    hint: 'Meta description untuk mesin pencari.',
+    85→    85→  },
+    86→    86→  {
+    87→    87→    key: 'govName',
+    88→    88→    label: 'Nama Pemerintah Daerah',
+    89→    89→    placeholder: 'Pemerintah Kabupaten Seruyan',
+    90→    90→    max: 100,
+    91→    91→    hint: 'Tampil sebagai sub-judul di seluruh halaman dashboard.',
+    92→    92→  },
+    93→    93→  {
+    94→    94→    key: 'brandText',
+    95→    95→    label: 'Teks Brand Header',
+    96→    96→    placeholder: 'BPKD',
+    97→    97→    max: 30,
+    98→    98→    hint: 'Teks utama di pita biru bagian atas.',
+    99→    99→  },
+   100→   100→  {
+   101→   101→    key: 'brandSubtext',
+   102→   102→    label: 'Sub-teks Brand Header',
+   103→   103→    placeholder: 'Provinsi DKI Jakarta',
+   104→   104→    max: 60,
+   105→   105→  },
+   106→   106→  {
+   107→   107→    key: 'footerText',
+   108→   108→    label: 'Teks Footer',
+   109→   109→    placeholder: 'Dashboard Monitoring Pengelolaan Keuangan Daerah — …',
+   110→   110→    max: 200,
+   111→   111→    textarea: true,
+   112→   112→  },
+   113→   113→]
+   114→   114→
+   115→   115→export function AdminSettingsSection() {
+   116→   116→  const { toast } = useToast()
+   117→   117→  const queryClient = useQueryClient()
+   118→   118→  const { data, isLoading } = useSettings()
+   119→   119→
+   120→   120→  // draf perubahan teks; nilai efektif = draf > data > bawaan
+   121→   121→  const [draft, setDraft] = useState<Partial<Record<TextKey, string>>>({})
+   122→   122→  const [saving, setSaving] = useState(false)
+   123→   123→  const [resetOpen, setResetOpen] = useState(false)
+   124→   124→  const [uploading, setUploading] = useState<'logo' | 'sidebar-logo' | 'emblem' | 'favicon' | null>(null)
+   125→   125→
+   126→   126→  const logoInputRef = useRef<HTMLInputElement>(null)
+   127→   127→  const sidebarLogoInputRef = useRef<HTMLInputElement>(null)
+   128→   128→  const emblemInputRef = useRef<HTMLInputElement>(null)
+   129→   129→  const faviconInputRef = useRef<HTMLInputElement>(null)
+   130→   130→
+   131→   131→  // Draf warna header (hex); null = belum diubah (ikut data server)
+   132→   132→  const [headerColorDraft, setHeaderColorDraft] = useState<string | null>(null)
+   133→   133→  const headerColorValue = headerColorDraft ?? (data?.headerColor ?? '')
+   134→   134→
+   135→   135→  // ---- AI Copilot: konfigurasi provider LLM ----
+   136→   136→  const copilotQuery = useQuery({
+   137→   137→    queryKey: ['copilot-settings'],
+   138→   138→    queryFn: async (): Promise<CopilotSettingsDto> => {
+   139→   139→      const res = await fetch('/api/admin/settings/copilot')
+   140→   140→      if (!res.ok) throw new Error('Gagal memuat konfigurasi AI Copilot')
+   141→   141→      const json = (await res.json()) as { data: CopilotSettingsDto }
+   142→   142→      return json.data
+   143→   143→    },
+   144→   144→    staleTime: 30_000,
+   145→   145→    retry: 1,
+   146→   146→  })
+   147→   147→  const [cpHydrated, setCpHydrated] = useState(false)
+   148→   148→  const [cpProvider, setCpProvider] = useState('default')
+   149→   149→  const [cpModel, setCpModel] = useState('')
+   150→   150→  const [cpBase, setCpBase] = useState('')
+   151→   151→  const [cpKey, setCpKey] = useState('')
+   152→   152→  const [showKey, setShowKey] = useState(false)
+   153→   153→  const [cpSaving, setCpSaving] = useState(false)
+   154→   154→  const [cpTesting, setCpTesting] = useState(false)
+   155→   155→  const [cpTest, setCpTest] = useState<{ ok: boolean; message: string } | null>(null)
+   156→   156→  const [cpClearOpen, setCpClearOpen] = useState(false)
+   157→   157→
+   158→   158→  // Isi draf dari data server saat pertama dimuat
+   159→   159→  useEffect(() => {
+   160→   160→    if (copilotQuery.data && !cpHydrated) {
+   161→   161→      setCpProvider(copilotQuery.data.provider)
+   162→   162→      setCpModel(copilotQuery.data.model ?? '')
+   163→   163→      setCpBase(copilotQuery.data.baseUrl ?? '')
+   164→   164→      setCpHydrated(true)
+   165→   165→    }
+   166→   166→  }, [copilotQuery.data, cpHydrated])
+   167→   167→
+   168→   168→  const cpProviderDef = findCopilotProvider(cpProvider) ?? COPILOT_PROVIDERS[0]
+   169→   169→  const cpIsDefault = cpProviderDef.id === 'default'
+   170→   170→  const cpKeyPlaceholder = copilotQuery.data?.hasApiKey
+   171→   171→    ? `${copilotQuery.data.apiKeyMasked} — tersimpan (biarkan kosong untuk memakainya)`
+   172→   172→    : cpProviderDef.keyHint || 'API Key'
+   173→   173→
+   174→   174→  /** Ganti provider: praisi Base URL & contoh model dari registry. */
+   175→   175→  function selectCpProvider(id: string) {
+   176→   176→    setCpProvider(id)
+   177→   177→    const p = findCopilotProvider(id)
+   178→   178→    setCpBase(p?.baseUrl ?? '')
+   179→   179→    setCpModel(p?.modelPlaceholder ?? '')
+   180→   180→    setCpKey('')
+   181→   181→    setCpTest(null)
+   182→   182→  }
+   183→   183→
+   184→   184→  async function saveCopilot() {
+   185→   185→    setCpSaving(true)
+   186→   186→    try {
+   187→   187→      const res = await fetch('/api/admin/settings/copilot', {
+   188→   188→        method: 'PUT',
+   189→   189→        headers: { 'Content-Type': 'application/json' },
+   190→   190→        body: JSON.stringify({
+   191→   191→          provider: cpProvider,
+   192→   192→          ...(cpIsDefault
+   193→   193→            ? {}
+   194→   194→            : { baseUrl: cpBase, model: cpModel, ...(cpKey.trim() ? { apiKey: cpKey.trim() } : {}) }),
+   195→   195→        }),
+   196→   196→      })
+   197→   197→      const json = (await res.json()) as { data?: CopilotSettingsDto; error?: string }
+   198→   198→      if (!res.ok || !json.data) throw new Error(json.error ?? 'Gagal menyimpan')
+   199→   199→      toast({ title: 'Konfigurasi AI Copilot tersimpan' })
+   200→   200→      setCpKey('')
+   201→   201→      setCpTest(null)
+   202→   202→      await queryClient.invalidateQueries({ queryKey: ['copilot-settings'] })
+   203→   203→    } catch (err) {
+   204→   204→      toast({ title: 'Gagal menyimpan konfigurasi', description: String(err), variant: 'destructive' })
+   205→   205→    } finally {
+   206→   206→      setCpSaving(false)
+   207→   207→    }
+   208→   208→  }
+   209→   209→
+   210→   210→  /** Uji koneksi memakai nilai draf (key kosong → pakai key tersimpan). */
+   211→   211→  async function testCopilot() {
+   212→   212→    setCpTesting(true)
+   213→   213→    setCpTest(null)
+   214→   214→    try {
+   215→   215→      const res = await fetch('/api/admin/settings/copilot/test', {
+   216→   216→        method: 'POST',
+   217→   217→        headers: { 'Content-Type': 'application/json' },
+   218→   218→        body: JSON.stringify({
+   219→   219→          provider: cpProvider,
+   220→   220→          ...(cpIsDefault
+   221→   221→            ? {}
+   222→   222→            : { baseUrl: cpBase, model: cpModel, ...(cpKey.trim() ? { apiKey: cpKey.trim() } : {}) }),
+   223→   223→        }),
+   224→   224→      })
+   225→   225→      const json = (await res.json()) as {
+   226→   226→        data?: { engine: string; reply: string; latencyMs: number }
+   227→   227→        error?: string
+   228→   228→      }
+   229→   229→      if (!res.ok || !json.data) throw new Error(json.error ?? 'Gagal menguji koneksi')
+   230→   230→      setCpTest({
+   231→   231→        ok: true,
+   232→   232→        message: `Berhasil terhubung ke ${json.data.engine} dalam ${json.data.latencyMs} ms — balasan: "${json.data.reply.slice(0, 80)}"`,
+   233→   233→      })
+   234→   234→    } catch (err) {
+   235→   235→      setCpTest({ ok: false, message: String(err) })
+   236→   236→    } finally {
+   237→   237→      setCpTesting(false)
+   238→   238→    }
+   239→   239→  }
+   240→   240→
+   241→   241→  async function clearCopilot() {
+   242→   242→    setCpClearOpen(false)
+   243→   243→    try {
+   244→   244→      const res = await fetch('/api/admin/settings/copilot', { method: 'DELETE' })
+   245→   245→      const json = (await res.json()) as { data?: CopilotSettingsDto; error?: string }
+   246→   246→      if (!res.ok || !json.data) throw new Error(json.error ?? 'Gagal menghapus')
+   247→   247→      toast({ title: 'AI Copilot kembali ke mesin bawaan (Z.ai)' })
+   248→   248→      // reset draf lokal agar form langsung mencerminkan kondisi bawaan
+   249→   249→      setCpKey('')
+   250→   250→      setCpTest(null)
+   251→   251→      setCpProvider('default')
+   252→   252→      setCpModel('')
+   253→   253→      setCpBase('')
+   254→   254→      await queryClient.invalidateQueries({ queryKey: ['copilot-settings'] })
+   255→   255→    } catch (err) {
+   256→   256→      toast({ title: 'Gagal menghapus konfigurasi', description: String(err), variant: 'destructive' })
+   257→   257→    }
+   258→   258→  }
+   259→   259→
+   260→   260→
+   261→   261→  // Simpan warna header lewat endpoint yang sama dengan teks
+   262→   262→  async function saveHeaderColor(value: string) {
+   263→   263→    const color = value.trim()
+   264→   264→    if (color !== '' && !/^#[0-9a-fA-F]{6}$/.test(color)) {
+   265→   265→      toast({ title: 'Warna tidak valid', description: 'Gunakan kode hex #rrggbb.', variant: 'destructive' })
+   266→   266→      return
+   267→   267→    }
+   268→   268→    try {
+   269→   269→      const res = await fetch('/api/admin/settings', {
+   270→   270→        method: 'PUT',
+   271→   271→        headers: { 'Content-Type': 'application/json' },
+   272→   272→        body: JSON.stringify({ headerColor: color }),
+   273→   273→      })
+   274→   274→      const json = (await res.json()) as { data?: AppSettingsDto; error?: string }
+   275→   275→      if (!res.ok || !json.data) throw new Error(json.error ?? 'Gagal menyimpan warna')
+   276→   276→      setHeaderColorDraft(null)
+   277→   277→      toast({ title: color ? 'Warna header diperbarui' : 'Warna header kembali ke gradien bawaan' })
+   278→   278→      await queryClient.invalidateQueries({ queryKey: ['settings'] })
+   279→   279→    } catch (err) {
+   280→   280→      toast({ title: 'Gagal menyimpan warna', description: String(err), variant: 'destructive' })
+   281→   281→    }
+   282→   282→  }
+   283→   283→
+   284→   284→  const value = (key: TextKey): string => {
+   285→   285→    if (draft[key] !== undefined) return draft[key]
+   286→   286→    const current = data?.[key]
+   287→   287→    if (typeof current === 'string') return current
+   288→   288→    return DEFAULT_SETTINGS[key]
+   289→   289→  }
+   290→   290→
+   291→   291→  const dirty = TEXT_FIELDS.some((f) => draft[f.key] !== undefined)
+   292→   292→
+   293→   293→  async function handleSave() {
+   294→   294→    if (saving) return
+   295→   295→    setSaving(true)
+   296→   296→    try {
+   297→   297→      const body: Record<string, string> = {}
+   298→   298→      for (const f of TEXT_FIELDS) body[f.key] = value(f.key)
+   299→   299→      const res = await fetch('/api/admin/settings', {
+   300→   300→        method: 'PUT',
+   301→   301→        headers: { 'Content-Type': 'application/json' },
+   302→   302→        body: JSON.stringify(body),
+   303→   303→      })
+   304→   304→      const json = (await res.json()) as { data?: AppSettingsDto; error?: string }
+   305→   305→      if (!res.ok || !json.data) throw new Error(json.error ?? 'Gagal menyimpan')
+   306→   306→      toast({ title: 'Pengaturan tersimpan' })
+   307→   307→      setDraft({})
+   308→   308→      await queryClient.invalidateQueries({ queryKey: ['settings'] })
+   309→   309→    } catch (err) {
+   310→   310→      toast({ title: 'Gagal menyimpan', description: String(err), variant: 'destructive' })
+   311→   311→    } finally {
+   312→   312→      setSaving(false)
+   313→   313→    }
+   314→   314→  }
+   315→   315→
+   316→   316→  async function uploadImage(kind: 'logo' | 'sidebar-logo' | 'emblem' | 'favicon', file: File) {
+   317→   317→    const ref =
+   318→   318→      kind === 'logo'
+   319→   319→        ? logoInputRef
+   320→   320→        : kind === 'sidebar-logo'
+   321→   321→          ? sidebarLogoInputRef
+   322→   322→          : kind === 'emblem'
+   323→   323→            ? emblemInputRef
+   324→   324→            : faviconInputRef
+   325→   325→    if (ref) {
+   326→   326→      // reset nilai input agar file bernama sama bisa diunggah ulang
+   327→   327→      if (ref.current) ref.current.value = ''
+   328→   328→    }
+   329→   329→    if (!file.type.startsWith('image/')) {
+   330→   330→      toast({ title: 'File bukan gambar', description: 'Pilih file PNG/JPG/GIF/WebP/SVG/ICO.', variant: 'destructive' })
+   331→   331→      return
+   332→   332→    }
+   333→   333→    if (file.size > 2 * 1024 * 1024) {
+   334→   334→      toast({ title: 'File terlalu besar', description: 'Ukuran maksimum 2 MB.', variant: 'destructive' })
+   335→   335→      return
+   336→   336→    }
+   337→   337→    setUploading(kind)
+   338→   338→    try {
+   339→   339→      const fd = new FormData()
+   340→   340→      fd.append('file', file)
+   341→   341→      const res = await fetch(`/api/admin/settings/${kind}`, { method: 'POST', body: fd })
+   342→   342→      const json = (await res.json()) as {
+   343→   343→        data?: { logoUrl?: string; sidebarLogoUrl?: string; emblemUrl?: string; faviconUrl?: string }
+   344→   344→        error?: string
+   345→   345→      }
+   346→   346→      if (!res.ok || !json.data) throw new Error(json.error ?? 'Gagal mengunggah')
+   347→   347→      toast({
+   348→   348→        title:
+   349→   349→          kind === 'logo'
+   350→   350→            ? 'Logo diperbarui'
+   351→   351→            : kind === 'sidebar-logo'
+   352→   352→              ? 'Logo pojok kiri diperbarui'
+   353→   353→              : kind === 'emblem'
+   354→   354→                ? 'Lencana pojok kanan diperbarui'
+   355→   355→                : 'Favicon diperbarui',
+   356→   356→      })
+   357→   357→      await queryClient.invalidateQueries({ queryKey: ['settings'] })
+   358→   358→    } catch (err) {
+   359→   359→      toast({ title: 'Gagal mengunggah', description: String(err), variant: 'destructive' })
+   360→   360→    } finally {
+   361→   361→      setUploading(null)
+   362→   362→    }
+   363→   363→  }
+   364→   364→
+   365→   365→  async function removeImage(kind: 'logo' | 'sidebar-logo' | 'emblem' | 'favicon') {
+   366→   366→    try {
+   367→   367→      const res = await fetch(`/api/admin/settings/${kind}`, { method: 'DELETE' })
+   368→   368→      if (!res.ok) throw new Error('Gagal menghapus')
+   369→   369→      toast({
+   370→   370→        title:
+   371→   371→          kind === 'logo'
+   372→   372→            ? 'Logo kustom dihapus'
+   373→   373→            : kind === 'sidebar-logo'
+   374→   374→              ? 'Logo pojok kiri kembali mengikuti Logo Aplikasi'
+   375→   375→              : kind === 'emblem'
+   376→   376→                ? 'Lencana pojok kanan kembali ke emblem emas bawaan'
+   377→   377→                : 'Favicon kustom dihapus',
+   378→   378→      })
+   379→   379→      await queryClient.invalidateQueries({ queryKey: ['settings'] })
+   380→   380→    } catch (err) {
+   381→   381→      toast({ title: 'Gagal menghapus', description: String(err), variant: 'destructive' })
+   382→   382→    }
+   383→   383→  }
+   384→   384→
+   385→   385→  async function handleReset() {
+   386→   386→    try {
+   387→   387→      const res = await fetch('/api/admin/settings/reset', { method: 'POST' })
+   388→   388→      if (!res.ok) throw new Error('Gagal mereset')
+   389→   389→      toast({ title: 'Semua pengaturan dikembalikan ke bawaan' })
+   390→   390→      setDraft({})
+   391→   391→      await queryClient.invalidateQueries({ queryKey: ['settings'] })
+   392→   392→    } catch (err) {
+   393→   393→      toast({ title: 'Gagal mereset', description: String(err), variant: 'destructive' })
+   394→   394→    }
+   395→   395→  }
+   396→   396→
+   397→   397→  return (
+   398→   398→    <div>
+   399→   399→      <h2 className="mb-4 text-base font-bold uppercase tracking-wide text-foreground">
+   400→   400→        Pengaturan Aplikasi
+   401→   401→      </h2>
+   402→   402→
+   403→   403→      {/* Identitas aplikasi */}
+   404→   404→      <section className="mb-5 rounded-lg border bg-card p-4 shadow-sm sm:p-5">
+   405→   405→        <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-foreground/80">
+   406→   406→          Identitas Aplikasi
+   407→   407→        </h3>
+   408→   408→        <p className="mb-4 text-xs text-muted-foreground">
+   409→   409→          Ubah nama aplikasi, judul halaman, dan teks brand yang tampil di seluruh dashboard.
+   410→   410→        </p>
+   411→   411→
+   412→   412→        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+   413→   413→          {TEXT_FIELDS.map((f) => (
+   414→   414→            <div key={f.key} className={f.textarea ? 'sm:col-span-2' : ''}>
+   415→   415→              <Label htmlFor={`set-${f.key}`} className="mb-1.5 flex items-center justify-between">
+   416→   416→                <span>{f.label}</span>
+   417→   417→                <span className="text-[10px] font-normal text-muted-foreground">
+   418→   418→                  {value(f.key).length}/{f.max}
+   419→   419→                </span>
+   420→   420→              </Label>
+   421→   421→              {f.textarea ? (
+   422→   422→                <Textarea
+   423→   423→                  id={`set-${f.key}`}
+   424→   424→                  value={value(f.key)}
+   425→   425→                  placeholder={f.placeholder}
+   426→   426→                  maxLength={f.max}
+   427→   427→                  rows={2}
+   428→   428→                  onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))}
+   429→   429→                />
+   430→   430→              ) : (
+   431→   431→                <Input
+   432→   432→                  id={`set-${f.key}`}
+   433→   433→                  value={value(f.key)}
+   434→   434→                  placeholder={f.placeholder}
+   435→   435→                  maxLength={f.max}
+   436→   436→                  onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))}
+   437→   437→                />
+   438→   438→              )}
+   439→   439→              {f.hint && <p className="mt-1 text-[11px] text-muted-foreground">{f.hint}</p>}
+   440→   440→            </div>
+   441→   441→          ))}
+   442→   442→        </div>
+   443→   443→
+   444→   444→        <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+   445→   445→          {dirty && (
+   446→   446→            <Button variant="ghost" size="sm" onClick={() => setDraft({})}>
+   447→   447→              <RotateCcw className="h-4 w-4" aria-hidden="true" /> Batalkan Perubahan
+   448→   448→            </Button>
+   449→   449→          )}
+   450→   450→          <Button
+   451→   451→            onClick={handleSave}
+   452→   452→            disabled={saving || isLoading}
+   453→   453→            size="sm"
+   454→   454→            className="bg-[#17408b] text-white hover:bg-[#12326e]"
+   455→   455→          >
+   456→   456→            {saving ? (
+   457→   457→              <>
+   458→   458→                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Menyimpan…
+   459→   459→              </>
+   460→   460→            ) : (
+   461→   461→              <>
+   462→   462→                <Save className="h-4 w-4" aria-hidden="true" /> Simpan Pengaturan
+   463→   463→              </>
+   464→   464→            )}
+   465→   465→          </Button>
+   466→   466→        </div>
+   467→   467→      </section>
+   468→   468→
+   469→   469→      {/* Logo & Favicon */}
+   470→   470→      <div className="mb-5 grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+   471→   471→        <section className="rounded-lg border bg-card p-4 shadow-sm sm:p-5">
+   472→   472→          <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-foreground/80">
+   473→   473→            Logo Aplikasi
+   474→   474→          </h3>
+   475→   475→          <p className="mb-4 text-xs text-muted-foreground">
+   476→   476→            Tampil di pita header (dan jadi fallback logo pojok kiri sidebar).
+   477→   477→            PNG/JPG/GIF/WebP/SVG/ICO, maks 2 MB.
+   478→   478→          </p>
+   479→   479→          <div className="flex items-center gap-4">
+   480→   480→            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-lg border bg-muted/30 p-2">
+   481→   481→              {isLoading ? (
+   482→   482→                <Skeleton className="h-14 w-14" />
+   483→   483→              ) : data?.logoUrl ? (
+   484→   484→                <img src={data.logoUrl} alt="Logo aplikasi" className="h-16 w-16 object-contain" />
+   485→   485→              ) : (
+   486→   486→                <DkiEmblem className="h-14 w-14" />
+   487→   487→              )}
+   488→   488→            </div>
+   489→   489→            <div className="min-w-0 flex-1">
+   490→   490→              <p className="text-xs font-semibold text-foreground">
+   491→   491→                {data?.logoUrl ? 'Logo kustom aktif' : 'Menggunakan emblem bawaan'}
+   492→   492→              </p>
+   493→   493→              <div className="mt-2 flex flex-wrap gap-2">
+   494→   494→                <input
+   495→   495→                  ref={logoInputRef}
+   496→   496→                  type="file"
+   497→   497→                  accept="image/*,.ico,.svg"
+   498→   498→                  className="sr-only"
+   499→   499→                  onChange={(e) => {
+   500→   500→                    const file = e.target.files?.[0]
+   501→   501→                    if (file) void uploadImage('logo', file)
+   502→   502→                  }}
+   503→   503→                />
+   504→   504→                <Button
+   505→   505→                  variant="outline"
+   506→   506→                  size="sm"
+   507→   507→                  onClick={() => logoInputRef.current?.click()}
+   508→   508→                  disabled={uploading === 'logo'}
+   509→   509→                >
+   510→   510→                  {uploading === 'logo' ? (
+   511→   511→                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+   512→   512→                  ) : (
+   513→   513→                    <Upload className="h-4 w-4" aria-hidden="true" />
+   514→   514→                  )}
+   515→   515→                  Unggah Logo
+   516→   516→                </Button>
+   517→   517→                {data?.logoUrl && (
+   518→   518→                  <Button
+   519→   519→                    variant="outline"
+   520→   520→                    size="sm"
+   521→   521→                    onClick={() => removeImage('logo')}
+   522→   522→                    className="text-destructive hover:text-destructive"
+   523→   523→                  >
+   524→   524→                    <Trash2 className="h-4 w-4" aria-hidden="true" /> Hapus
+   525→   525→                  </Button>
+   526→   526→                )}
+   527→   527→              </div>
+   528→   528→            </div>
+   529→   529→          </div>
+   530→   530→        </section>
+   531→   531→
+   532→   532→        <section className="rounded-lg border bg-card p-4 shadow-sm sm:p-5">
+   533→   533→          <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-foreground/80">
+   534→   534→            Logo Pojok Kiri (Sidebar)
+   535→   535→          </h3>
+   536→   536→          <p className="mb-4 text-xs text-muted-foreground">
+   537→   537→            Logo kecil di pojok kiri atas aplikasi. Bila kosong, mengikuti Logo Aplikasi.
+   538→   538→            PNG/JPG/GIF/WebP/SVG/ICO, maks 2 MB.
+   539→   539→          </p>
+   540→   540→          <div className="flex items-center gap-4">
+   541→   541→            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-lg border bg-[#1b2a4a] p-2">
+   542→   542→              {isLoading ? (
+   543→   543→                <Skeleton className="h-12 w-12" />
+   544→   544→              ) : data?.sidebarLogoUrl || data?.logoUrl ? (
+   545→   545→                <img
+   546→   546→                  src={data.sidebarLogoUrl ?? data.logoUrl ?? undefined}
+   547→   547→                  alt="Logo pojok kiri"
+   548→   548→                  className="h-14 w-14 rounded object-contain"
+   549→   549→                />
+   550→   550→              ) : (
+   551→   551→                <DkiEmblem className="h-12 w-12" />
+   552→   552→              )}
+   553→   553→            </div>
+   554→   554→            <div className="min-w-0 flex-1">
+   555→   555→              <p className="text-xs font-semibold text-foreground">
+   556→   556→                {data?.sidebarLogoUrl
+   557→   557→                  ? 'Logo pojok kiri kustom aktif'
+   558→   558→                  : data?.logoUrl
+   559→   559→                    ? 'Mengikuti Logo Aplikasi'
+   560→   560→                    : 'Menggunakan emblem bawaan'}
+   561→   561→              </p>
+   562→   562→              <div className="mt-2 flex flex-wrap gap-2">
+   563→   563→                <input
+   564→   564→                  ref={sidebarLogoInputRef}
+   565→   565→                  type="file"
+   566→   566→                  accept="image/*,.ico,.svg"
+   567→   567→                  className="sr-only"
+   568→   568→                  onChange={(e) => {
+   569→   569→                    const file = e.target.files?.[0]
+   570→   570→                    if (file) void uploadImage('sidebar-logo', file)
+   571→   571→                  }}
+   572→   572→                />
+   573→   573→                <Button
+   574→   574→                  variant="outline"
+   575→   575→                  size="sm"
+   576→   576→                  onClick={() => sidebarLogoInputRef.current?.click()}
+   577→   577→                  disabled={uploading === 'sidebar-logo'}
+   578→   578→                >
+   579→   579→                  {uploading === 'sidebar-logo' ? (
+   580→   580→                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+   581→   581→                  ) : (
+   582→   582→                    <Upload className="h-4 w-4" aria-hidden="true" />
+   583→   583→                  )}
+   584→   584→                  Unggah Logo Pojok Kiri
+   585→   585→                </Button>
+   586→   586→                {data?.sidebarLogoUrl && (
+   587→   587→                  <Button
+   588→   588→                    variant="outline"
+   589→   589→                    size="sm"
+   590→   590→                    onClick={() => removeImage('sidebar-logo')}
+   591→   591→                    className="text-destructive hover:text-destructive"
+   592→   592→                  >
+   593→   593→                    <Trash2 className="h-4 w-4" aria-hidden="true" /> Hapus
+   594→   594→                  </Button>
+   595→   595→                )}
+   596→   596→              </div>
+   597→   597→            </div>
+   598→   598→          </div>
+   599→   599→        </section>
+   600→   600→
+   601→   601→        <section className="rounded-lg border bg-card p-4 shadow-sm sm:p-5">
+   602→   602→          <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-foreground/80">
+   603→   603→            Logo Pojok Kanan (Lencana)
+   604→   604→          </h3>
+   605→   605→          <p className="mb-4 text-xs text-muted-foreground">
+   606→   606→            Logo/lencana di pojok kanan pita header. Bila kosong, memakai emblem emas bawaan.
+   607→   607→            PNG/JPG/GIF/WebP/SVG/ICO, maks 2 MB.
+   608→   608→          </p>
+   609→   609→          <div className="flex items-center gap-4">
+   610→   610→            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-lg border bg-gradient-to-r from-[#17408b] to-[#1d4ed8] p-2">
+   611→   611→              {isLoading ? (
+   612→   612→                <Skeleton className="h-14 w-14" />
+   613→   613→              ) : data?.emblemUrl ? (
+   614→   614→                <img src={data.emblemUrl} alt="Lencana aplikasi" className="h-16 w-16 object-contain" />
+   615→   615→              ) : (
+   616→   616→                <GoldEmblem className="h-16 w-16" />
+   617→   617→              )}
+   618→   618→            </div>
+   619→   619→            <div className="min-w-0 flex-1">
+   620→   620→              <p className="text-xs font-semibold text-foreground">
+   621→   621→                {data?.emblemUrl ? 'Lencana kustom aktif' : 'Menggunakan emblem emas bawaan'}
+   622→   622→              </p>
+   623→   623→              <div className="mt-2 flex flex-wrap gap-2">
+   624→   624→                <input
+   625→   625→                  ref={emblemInputRef}
+   626→   626→                  type="file"
+   627→   627→                  accept="image/*,.ico,.svg"
+   628→   628→                  className="sr-only"
+   629→   629→                  onChange={(e) => {
+   630→   630→                    const file = e.target.files?.[0]
+   631→   631→                    if (file) void uploadImage('emblem', file)
+   632→   632→                  }}
+   633→   633→                />
+   634→   634→                <Button
+   635→   635→                  variant="outline"
+   636→   636→                  size="sm"
+   637→   637→                  onClick={() => emblemInputRef.current?.click()}
+   638→   638→                  disabled={uploading === 'emblem'}
+   639→   639→                >
+   640→   640→                  {uploading === 'emblem' ? (
+   641→   641→                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+   642→   642→                  ) : (
+   643→   643→                    <Upload className="h-4 w-4" aria-hidden="true" />
+   644→   644→                  )}
+   645→   645→                  Unggah Lencana
+   646→   646→                </Button>
+   647→   647→                {data?.emblemUrl && (
+   648→   648→                  <Button
+   649→   649→                    variant="outline"
+   650→   650→                    size="sm"
+   651→   651→                    onClick={() => removeImage('emblem')}
+   652→   652→                    className="text-destructive hover:text-destructive"
+   653→   653→                  >
+   654→   654→                    <Trash2 className="h-4 w-4" aria-hidden="true" /> Hapus
+   655→   655→                  </Button>
+   656→   656→                )}
+   657→   657→              </div>
+   658→   658→            </div>
+   659→   659→          </div>
+   660→   660→        </section>
+   661→   661→
+   662→   662→        <section className="rounded-lg border bg-card p-4 shadow-sm sm:p-5">
+   663→   663→          <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-foreground/80">
+   664→   664→            Warna Header
+   665→   665→          </h3>
+   666→   666→          <p className="mb-4 text-xs text-muted-foreground">
+   667→   667→            Warna latar pita header atas. Bila kosong, memakai gradien biru bawaan.
+   668→   668→          </p>
+   669→   669→          <div className="flex flex-wrap items-center gap-2">
+   670→   670→            {(PRESET_HEADER_COLORS).map((c) => (
+   671→   671→              <button
+   672→   672→                key={c}
+   673→   673→                type="button"
+   674→   674→                onClick={() => void saveHeaderColor(c)}
+   675→   675→                aria-label={`Pakai warna ${c}`}
+   676→   676→                title={c}
+   677→   677→                className={`h-8 w-8 rounded-full border-2 transition-transform hover:scale-110 ${
+   678→   678→                  headerColorValue.toLowerCase() === c ? 'border-foreground' : 'border-border'
+   679→   679→                }`}
+   680→   680→                style={{ backgroundColor: c }}
+   681→   681→              />
+   682→   682→            ))}
+   683→   683→            <div className="ml-1 flex items-center gap-2">
+   684→   684→              <input
+   685→   685→                type="color"
+   686→   686→                aria-label="Pilih warna kustom"
+   687→   687→                value={headerColorValue || '#17408b'}
+   688→   688→                onChange={(e) => setHeaderColorDraft(e.target.value)}
+   689→   689→                className="h-8 w-10 cursor-pointer rounded border border-input bg-background p-0.5"
+   690→   690→              />
+   691→   691→              <Input
+   692→   692→                value={headerColorValue}
+   693→   693→                onChange={(e) => setHeaderColorDraft(e.target.value)}
+   694→   694→                placeholder="#17408b"
+   695→   695→                className="h-8 w-28 font-mono text-xs"
+   696→   696→                aria-label="Kode hex warna header"
+   697→   697→              />
+   698→   698→              <Button
+   699→   699→                size="sm"
+   700→   700→                onClick={() => void saveHeaderColor(headerColorDraft ?? headerColorValue)}
+   701→   701→                disabled={headerColorDraft === null || headerColorDraft === (data?.headerColor ?? '')}
+   702→   702→                className="h-8 bg-[#17408b] text-white hover:bg-[#12326e]"
+   703→   703→              >
+   704→   704→                Terapkan
+   705→   705→              </Button>
+   706→   706→            </div>
+   707→   707→          </div>
+   708→   708→          {(data?.headerColor || headerColorDraft) && (
+   709→   709→            <div className="mt-3 flex items-center gap-2">
+   710→   710→              <Button
+   711→   711→                variant="outline"
+   712→   712→                size="sm"
+   713→   713→                onClick={() => void saveHeaderColor('')}
+   714→   714→                className="text-muted-foreground"
+   715→   715→              >
+   716→   716→                <RotateCcw className="h-4 w-4" aria-hidden="true" /> Kembalikan Gradien Bawaan
+   717→   717→              </Button>
+   718→   718→              <span className="text-[11px] text-muted-foreground">
+   719→   719→                Aktif: <span className="font-mono font-semibold">{headerColorValue}</span>
+   720→   720→              </span>
+   721→   721→            </div>
+   722→   722→          )}
+   723→   723→        </section>
+   724→   724→
+   725→   725→        <section className="rounded-lg border bg-card p-4 shadow-sm sm:p-5">
+   726→   726→          <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-foreground/80">
+   727→   727→            Favicon
+   728→   728→          </h3>
+   729→   729→          <p className="mb-4 text-xs text-muted-foreground">
+   730→   730→            Ikon pada tab browser. Disarankan persegi (32×32 atau lebih), maks 2 MB.
+   731→   731→          </p>
+   732→   732→          <div className="flex items-center gap-4">
+   733→   733→            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-lg border bg-muted/30 p-2">
+   734→   734→              {isLoading ? (
+   735→   735→                <Skeleton className="h-10 w-10" />
+   736→   736→              ) : data?.faviconUrl ? (
+   737→   737→                <img src={data.faviconUrl} alt="Favicon" className="h-10 w-10 object-contain" />
+   738→   738→              ) : (
+   739→   739→                <div className="flex h-10 w-10 items-center justify-center rounded bg-muted text-[10px] text-muted-foreground">
+   740→   740→                  n/a
+   741→   741→                </div>
+   742→   742→              )}
+   743→   743→            </div>
+   744→   744→            <div className="min-w-0 flex-1">
+   745→   745→              <p className="text-xs font-semibold text-foreground">
+   746→   746→                {data?.faviconUrl ? 'Favicon kustom aktif' : 'Menggunakan favicon bawaan'}
+   747→   747→              </p>
+   748→   748→              <div className="mt-2 flex flex-wrap gap-2">
+   749→   749→                <input
+   750→   750→                  ref={faviconInputRef}
+   751→   751→                  type="file"
+   752→   752→                  accept="image/*,.ico,.svg"
+   753→   753→                  className="sr-only"
+   754→   754→                  onChange={(e) => {
+   755→   755→                    const file = e.target.files?.[0]
+   756→   756→                    if (file) void uploadImage('favicon', file)
+   757→   757→                  }}
+   758→   758→                />
+   759→   759→                <Button
+   760→   760→                  variant="outline"
+   761→   761→                  size="sm"
+   762→   762→                  onClick={() => faviconInputRef.current?.click()}
+   763→   763→                  disabled={uploading === 'favicon'}
+   764→   764→                >
+   765→   765→                  {uploading === 'favicon' ? (
+   766→   766→                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+   767→   767→                  ) : (
+   768→   768→                    <Upload className="h-4 w-4" aria-hidden="true" />
+   769→   769→                  )}
+   770→   770→                  Unggah Favicon
+   771→   771→                </Button>
+   772→   772→                {data?.faviconUrl && (
+   773→   773→                  <Button
+   774→   774→                    variant="outline"
+   775→   775→                    size="sm"
+   776→   776→                    onClick={() => removeImage('favicon')}
+   777→   777→                    className="text-destructive hover:text-destructive"
+   778→   778→                  >
+   779→   779→                    <Trash2 className="h-4 w-4" aria-hidden="true" /> Hapus
+   780→   780→                  </Button>
+   781→   781→                )}
+   782→   782→              </div>
+   783→   783→            </div>
+   784→   784→          </div>
+   785→   785→        </section>
+   786→   786→      </div>
+   787→   787→
+   788→   788→      {/* AI Copilot — Provider LLM */}
+   789→   789→      <section className="mb-5 rounded-lg border bg-card p-4 shadow-sm sm:p-5">
+   790→   790→        <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+   791→   791→          <h3 className="text-sm font-bold uppercase tracking-wide text-foreground/80">
+   792→   792→            AI Copilot — Provider LLM
+   793→   793→          </h3>
+   794→   794→          <span className="inline-flex items-center gap-1.5 rounded-full border border-[#17408b]/20 bg-[#17408b]/5 px-2.5 py-0.5 text-[11px] font-semibold text-[#17408b]">
+   795→   795→            <Bot className="h-3 w-3" aria-hidden="true" />
+   796→   796→            {copilotQuery.data?.providerLabel ?? 'Bawaan (Z.ai)'}
+   797→   797→          </span>
+   798→   798→        </div>
+   799→   799→        <p className="mb-4 text-xs text-muted-foreground">
+   800→   800→          Hubungkan AI Copilot dengan penyedia LLM pilihan Anda — semua provider populer
+   801→   801→          didukung melalui protokol OpenAI-Compatible. Tanpa konfigurasi, Copilot memakai
+   802→   802→          mesin bawaan (Z.ai).
+   803→   803→        </p>
+   804→   804→
+   805→   805→        {copilotQuery.isLoading ? (
+   806→   806→          <Skeleton className="h-32 w-full" />
+   807→   807→        ) : (
+   808→   808→          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+   809→   809→            {/* Provider */}
+   810→   810→            <div className="space-y-1.5">
+   811→   811→              <Label>Provider</Label>
+   812→   812→              <Select value={cpProvider} onValueChange={selectCpProvider}>
+   813→   813→                <SelectTrigger aria-label="Pilih provider LLM">
+   814→   814→                  <SelectValue />
+   815→   815→                </SelectTrigger>
+   816→   816→                <SelectContent>
+   817→   817→                  {COPILOT_PROVIDERS.map((p) => (
+   818→   818→                    <SelectItem key={p.id} value={p.id}>
+   819→   819→                      {p.label}
+   820→   820→                    </SelectItem>
+   821→   821→                  ))}
+   822→   822→                </SelectContent>
+   823→   823→              </Select>
+   824→   824→              <p className="text-[11px] text-muted-foreground">{cpProviderDef.hint}</p>
+   825→   825→            </div>
+   826→   826→
+   827→   827→            {/* Model */}
+   828→   828→            <div className="space-y-1.5">
+   829→   829→              <Label htmlFor="cp-model">Model</Label>
+   830→   830→              <Input
+   831→   831→                id="cp-model"
+   832→   832→                value={cpModel}
+   833→   833→                onChange={(e) => setCpModel(e.target.value)}
+   834→   834→                placeholder={cpProviderDef.modelPlaceholder ?? 'mis. gpt-4o-mini'}
+   835→   835→                disabled={cpIsDefault}
+   836→   836→                maxLength={120}
+   837→   837→                autoComplete="off"
+   838→   838→              />
+   839→   839→              <p className="text-[11px] text-muted-foreground">
+   840→   840→                {cpIsDefault
+   841→   841→                  ? 'Mesin bawaan memilih model otomatis.'
+   842→   842→                  : 'Nama model persis seperti tercantum di dokumentasi provider.'}
+   843→   843→              </p>
+   844→   844→            </div>
+   845→   845→
+   846→   846→            {/* API Key */}
+   847→   847→            <div className="space-y-1.5 sm:col-span-2">
+   848→   848→              <Label htmlFor="cp-key">API Key</Label>
+   849→   849→              <div className="relative">
+   850→   850→                <Input
+   851→   851→                  id="cp-key"
+   852→   852→                  type={showKey ? 'text' : 'password'}
+   853→   853→                  value={cpKey}
+   854→   854→                  onChange={(e) => setCpKey(e.target.value)}
+   855→   855→                  placeholder={cpKeyPlaceholder}
+   856→   856→                  disabled={cpIsDefault}
+   857→   857→                  maxLength={500}
+   858→   858→                  autoComplete="new-password"
+   859→   859→                  className="pr-10 font-mono text-xs"
+   860→   860→                />
+   861→   861→                <button
+   862→   862→                  type="button"
+   863→   863→                  onClick={() => setShowKey((v) => !v)}
+   864→   864→                  aria-label={showKey ? 'Sembunyikan API key' : 'Tampilkan API key'}
+   865→   865→                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:text-foreground"
+   866→   866→                >
+   867→   867→                  {showKey ? (
+   868→   868→                    <EyeOff className="h-4 w-4" aria-hidden="true" />
+   869→   869→                  ) : (
+   870→   870→                    <Eye className="h-4 w-4" aria-hidden="true" />
+   871→   871→                  )}
+   872→   872→                </button>
+   873→   873→              </div>
+   874→   874→              <p className="text-[11px] text-muted-foreground">
+   875→   875→                {cpIsDefault
+   876→   876→                  ? 'Mesin bawaan tidak memerlukan API key.'
+   877→   877→                  : copilotQuery.data?.hasApiKey
+   878→   878→                    ? 'Key tersimpan aman — biarkan kosong bila tidak ingin mengganti.'
+   879→   879→                    : `${cpProviderDef.requiresKey ? 'Wajib diisi. ' : 'Opsional. '}${cpProviderDef.keyHint}. Disimpan di database server aplikasi.`}
+   880→   880→              </p>
+   881→   881→            </div>
+   882→   882→
+   883→   883→            {/* Base URL */}
+   884→   884→            <div className="space-y-1.5 sm:col-span-2">
+   885→   885→              <Label htmlFor="cp-base">Base URL</Label>
+   886→   886→              <Input
+   887→   887→                id="cp-base"
+   888→   888→                value={cpBase}
+   889→   889→                onChange={(e) => setCpBase(e.target.value)}
+   890→   890→                placeholder={cpProviderDef.baseUrl || 'https://provider-anda.example/v1'}
+   891→   891→                disabled={cpIsDefault}
+   892→   892→                maxLength={300}
+   893→   893→                autoComplete="off"
+   894→   894→                className="font-mono text-xs"
+   895→   895→              />
+   896→   896→              <p className="text-[11px] text-muted-foreground">
+   897→   897→                Endpoint OpenAI-Compatible (…/chat/completions ditambahkan otomatis).
+   898→   898→                Biarkan sesuai default provider kecuali Anda memakai proxy/kustom.
+   899→   899→              </p>
+   900→   900→            </div>
+   901→   901→          </div>
+   902→   902→        )}
+   903→   903→
+   904→   904→        {/* Aksi */}
+   905→   905→        <div className="mt-4 flex flex-wrap items-center gap-2">
+   906→   906→          <Button
+   907→   907→            variant="outline"
+   908→   908→            size="sm"
+   909→   909→            onClick={testCopilot}
+   910→   910→            disabled={cpTesting || copilotQuery.isLoading || (!cpIsDefault && !cpModel.trim())}
+   911→   911→          >
+   912→   912→            {cpTesting ? (
+   913→   913→              <>
+   914→   914→                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Menguji…
+   915→   915→              </>
+   916→   916→            ) : (
+   917→   917→              <>
+   918→   918→                <PlugZap className="h-4 w-4" aria-hidden="true" /> Uji Koneksi
+   919→   919→              </>
+   920→   920→            )}
+   921→   921→          </Button>
+   922→   922→          <Button
+   923→   923→            onClick={saveCopilot}
+   924→   924→            disabled={cpSaving || copilotQuery.isLoading || (!cpIsDefault && !cpModel.trim())}
+   925→   925→            size="sm"
+   926→   926→            className="bg-[#17408b] text-white hover:bg-[#12326e]"
+   927→   927→          >
+   928→   928→            {cpSaving ? (
+   929→   929→              <>
+   930→   930→                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Menyimpan…
+   931→   931→              </>
+   932→   932→            ) : (
+   933→   933→              <>
+   934→   934→                <Save className="h-4 w-4" aria-hidden="true" /> Simpan Konfigurasi
+   935→   935→              </>
+   936→   936→            )}
+   937→   937→          </Button>
+   938→   938→          {copilotQuery.data?.provider !== 'default' && (
+   939→   939→            <Button
+   940→   940→              variant="outline"
+   941→   941→              size="sm"
+   942→   942→              onClick={() => setCpClearOpen(true)}
+   943→   943→              className="text-destructive hover:text-destructive"
+   944→   944→            >
+   945→   945→              <Trash2 className="h-4 w-4" aria-hidden="true" /> Kembalikan ke Bawaan
+   946→   946→            </Button>
+   947→   947→          )}
+   948→   948→        </div>
+   949→   949→
+   950→   950→        {/* Hasil uji koneksi */}
+   951→   951→        {cpTest && (
+   952→   952→          <p
+   953→   953→            role="status"
+   954→   954→            className={`mt-3 rounded-md border p-3 text-xs ${
+   955→   955→              cpTest.ok
+   956→   956→                ? 'border-green-300 bg-green-50 text-green-800'
+   957→   957→                : 'border-red-300 bg-red-50 text-red-700'
+   958→   958→            }`}
+   959→   959→          >
+   960→   960→            {cpTest.message}
+   961→   961→          </p>
+   962→   962→        )}
+   963→   963→
+   964→   964→        <AlertDialog open={cpClearOpen} onOpenChange={setCpClearOpen}>
+   965→   965→          <AlertDialogContent>
+   966→   966→            <AlertDialogHeader>
+   967→   967→              <AlertDialogTitle>Kembalikan AI Copilot ke mesin bawaan?</AlertDialogTitle>
+   968→   968→              <AlertDialogDescription>
+   969→   969→                Konfigurasi provider, model, dan API key akan dihapus. Copilot kembali
+   970→   970→                memakai mesin bawaan Z.ai.
+   971→   971→              </AlertDialogDescription>
+   972→   972→            </AlertDialogHeader>
+   973→   973→            <AlertDialogFooter>
+   974→   974→              <AlertDialogCancel>Batal</AlertDialogCancel>
+   975→   975→              <AlertDialogAction onClick={clearCopilot} className="bg-destructive text-white hover:bg-destructive/90">
+   976→   976→                Ya, Kembalikan
+   977→   977→              </AlertDialogAction>
+   978→   978→            </AlertDialogFooter>
+   979→   979→          </AlertDialogContent>
+   980→   980→        </AlertDialog>
+   981→   981→      </section>
+   982→   982→
+   983→   983→      {/* Reset */}
+   984→   984→      <section className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 sm:p-5">
+   985→   985→        <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-foreground/80">
+   986→   986→          Kembalikan Semua ke Bawaan
+   987→   987→        </h3>
+   988→   988→        <p className="mb-3 text-xs text-muted-foreground">
+   989→   989→          Menghapus seluruh pengaturan tampilan kustom (teks, logo, dan favicon) dan
+   990→   990→          mengembalikan nilai bawaan aplikasi. Konfigurasi AI Copilot (provider &amp; API key)
+   991→   991→          tidak ikut ter-reset.
+   992→   992→        </p>
+   993→   993→        <Button variant="destructive" size="sm" onClick={() => setResetOpen(true)}>
+   994→   994→          <RotateCcw className="h-4 w-4" aria-hidden="true" /> Reset Semua Pengaturan
+   995→   995→        </Button>
+   996→   996→      </section>
+   997→   997→
+   998→   998→      <AlertDialog open={resetOpen} onOpenChange={setResetOpen}>
+   999→   999→        <AlertDialogContent>
+  1000→  1000→          <AlertDialogHeader>
+  1001→  1001→            <AlertDialogTitle>Reset semua pengaturan?</AlertDialogTitle>
+  1002→  1002→            <AlertDialogDescription>
+  1003→  1003→              Seluruh kustomisasi tampilan (nama, judul, teks brand, footer, logo, dan favicon)
+  1004→  1004→              akan dikembalikan ke nilai bawaan. Konfigurasi AI Copilot dipertahankan.
+  1005→  1005→              Tindakan ini tidak dapat dibatalkan.
+  1006→  1006→            </AlertDialogDescription>
+  1007→  1007→          </AlertDialogHeader>
+  1008→  1008→          <AlertDialogFooter>
+  1009→  1009→            <AlertDialogCancel>Batal</AlertDialogCancel>
+  1010→  1010→            <AlertDialogAction onClick={handleReset} className="bg-destructive text-white hover:bg-destructive/90">
+  1011→  1011→              Ya, Reset
+  1012→  1012→            </AlertDialogAction>
+  1013→  1013→          </AlertDialogFooter>
+  1014→  1014→        </AlertDialogContent>
+  1015→  1015→      </AlertDialog>
+  1016→  1016→    </div>
+  1017→  1017→  )
+  1018→  1018→}
+  1019→  1019→
