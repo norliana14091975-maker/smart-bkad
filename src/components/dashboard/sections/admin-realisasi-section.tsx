@@ -224,9 +224,9 @@ function AkunTable() {
                         <span className="text-muted-foreground">Konsolidasi</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums">{formatRupiah0(row.anggaran)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatRupiah(row.anggaran)}</TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {formatRupiah0(row.realisasi)}
+                      {formatRupiah(row.realisasi)}
                       <span className="block text-[11px] font-semibold text-[#17408b]">
                         {row.anggaran > 0 ? formatPct((row.realisasi / row.anggaran) * 100) : '—'}
                       </span>

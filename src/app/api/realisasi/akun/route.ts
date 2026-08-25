@@ -15,25 +15,42 @@ interface AggRow {
 /**
  * Realisasi per-akun untuk dashboard publik.
  * - ?opdId=N  : hanya baris milik OPD tersebut.
- * - tanpa param: bila ada data OPD manapun → agregat (jumlah lintas OPD) per
- *   kode; bila belum ada → tampilkan data konsolidasi (scope global).
+ * - tanpa param: kumpulan SELURUH OPD menjadi satu — setiap kode rekening
+ *   dijumlahkan lintas OPD (scope opd:<id>). Bila belum ada OPD yang mengimpor
+ *   LRA, tampilkan data konsolidasi (scope global) sebagai fallback.
+ * Respons menyertakan `meta` (mode agregasi + daftar OPD penyusun) agar
+ * tampilan publik dapat menampilkan asal data.
  */
 export async function GET(request: NextRequest) {
   try {
     const opdParam = request.nextUrl.searchParams.get('opdId')
 
     let dbRows
+    let mode: 'opd' | 'aggregate' | 'global'
+    const opdIds = new Set<number>()
+
     if (opdParam !== null) {
+      // Tampilan satu OPD (dashboard OPD / dialog rincian SKPD)
+      mode = 'opd'
       const n = Number(opdParam)
-      dbRows = Number.isInteger(n) && n > 0
-        ? await db.realisasiAkun.findMany({ where: { scope: `opd:${n}` } })
-        : []
+      dbRows =
+        Number.isInteger(n) && n > 0
+          ? await db.realisasiAkun.findMany({ where: { scope: `opd:${n}` } })
+          : []
     } else {
       const all = await db.realisasiAkun.findMany()
-      const hasOpdRows = all.some((r) => r.scope !== 'global')
-      dbRows = hasOpdRows
-        ? all.filter((r) => r.scope !== 'global')
-        : all.filter((r) => r.scope === 'global')
+      const opdRows = all.filter((r) => r.scope !== 'global')
+      if (opdRows.length > 0) {
+        // Kumpulan semua OPD menjadi satu konsolidasi
+        mode = 'aggregate'
+        dbRows = opdRows
+        for (const r of opdRows) {
+          if (r.opdId) opdIds.add(r.opdId)
+        }
+      } else {
+        mode = 'global'
+        dbRows = all.filter((r) => r.scope === 'global')
+      }
     }
 
     // Urutkan menurut kode (kode 2-digit berisi nol sehingga urut leksikografis aman)
@@ -59,6 +76,17 @@ export async function GET(request: NextRequest) {
     }
     const rows = [...agg.values()]
 
+    // Nama OPD penyusun konsolidasi (untuk keterangan tampilan)
+    let opdNames: string[] = []
+    if (opdIds.size > 0) {
+      const opds = await db.opd.findMany({
+        where: { id: { in: [...opdIds] } },
+        select: { name: true },
+        orderBy: { name: 'asc' },
+      })
+      opdNames = opds.map((o) => o.name)
+    }
+
     const data: RealisasiAkunDto[] = rows.map((r) => ({
       code: r.code,
       name: r.name,
@@ -83,6 +111,11 @@ export async function GET(request: NextRequest) {
         totalRealisasiPenerimaan: totalPenerimaan,
         totalRealisasiPengeluaran: totalPengeluaran,
         silpa: totalPenerimaan - totalPengeluaran,
+      },
+      meta: {
+        mode,
+        opdCount: opdIds.size,
+        opdNames,
       },
     })
   } catch (error) {

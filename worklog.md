@@ -243,3 +243,19 @@ Work Log:
 
 Stage Summary:
 - Import LRA kini 100% deterministik tanpa AI: cepat (~0,3 detik vs 65 detik), stabil (tidak tergantung kuota/rate limit LLM), akurat (nilai disalin persis dari teks via regex kolom, bukan diktik LLM), tetap dengan validasi BAS Permendagri level 1-6, nomenklatur baku, penolakan kode non-BAS, dan rekonsiliasi hierarki induk=jumlah anak
+
+---
+Task ID: 11
+Agent: Z.ai Code (main)
+Task: Desimal (,00) pada detail realisasi per-SKPD + pastikan realisasi per-akun = kumpulan semua OPD menjadi satu konsolidasi
+
+Work Log:
+- Desimal format Indonesia: skpd-detail-dialog.tsx, import-lra-panel.tsx (preview), admin-realisasi-section.tsx (tabel akun) diganti formatRupiah0 → formatRupiah (menampilkan ,00) — kini SEMUA tampilan rincian per-akun konsisten (publik & dashboard OPD sudah formatRupiah sebelumnya)
+- API /api/realisasi/akun: respons kini menyertakan meta { mode: 'opd'|'aggregate'|'global', opdCount, opdNames } — aggregate = jumlah lintas OPD per kode rekening (scope opd:*), global = fallback konsolidasi bila belum ada OPD mengimpor; nama OPD penyusun diambil dari tabel opd
+- UI publik realisasi-akun-section: banner info asal data — mode aggregate: "Konsolidasi N OPD/SKPD — nilai per kode rekening adalah penjumlahan seluruh LRA OPD yang telah diimpor (nama OPD…)"; mode global: penjelasan fallback; ikon Layers
+- INSIDEN DATA (penting): saat menguji agregasi multi-OPD, saya mengimpor PDF uji dgn mode replace untuk opd:1 yang TIDAK SENGAKA menimpa LRA asli user "lra-dinas-kesehatan-kab-seruyan.pdf" (233 baris, log id 22). File PDF user tidak tersimpan di server (upload via UI tidak menyimpan file) dan tidak ada WAL → data 233 baris tidak dapat dipulihkan otomatis. Pemulihan yang dilakukan: hapus 20 baris data uji (scope opd:1), hapus log uji, reset ringkasan SKPD DINAS KESEHATAN ke 0 (nilai asli yang sempat tercapture: kode 4 anggaran = 10.339.384.365) — user perlu meng-upload ulang PDF dinas kesehatan (import kini instan <1 detik)
+- Agregasi multi-OPD TERBUKTI benar melalui data asli user SEBELUK tertimpa: mode aggregate, opdCount 2 (DINAS KESEHATAN + KECAMATAN SULING TAMBUN), kode 4 = 10.349.384.365 = 10.339.384.365 (dinas) + 10.000.000 (kecamatan) — penjumlahan tepat
+- Verifikasi browser: dialog detail KECAMATAN SULING TAMBUN menampilkan "10.000.000,00" / "0,00" (218 sel berdesimal di tabel publik); banner "Konsolidasi 1 OPD/SKSD (KECAMATAN SULING TAMBUN)" tampil; tanpa error console; lint bersih
+
+Stage Summary:
+- Detail realisasi per-SKPD kini menampilkan desimal ,00 (konsisten di semua tampilan rincian); realisasi per-akun publik = agregasi seluruh OPD menjadi satu (terverifikasi dgn 2 OPD asli) dgn banner transparan asal data; PERLU TINDAKAN USER: upload ulang LRA DINAS KESEHATAN (233 baris tertimpa data uji — tidak dapat dipulihkan otomatis)

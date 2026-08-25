@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { CalendarDays, Landmark, PiggyBank, TrendingUp, Wallet } from 'lucide-react'
+import { CalendarDays, Landmark, Layers, PiggyBank, TrendingUp, Wallet } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -29,10 +29,20 @@ interface Summary {
   silpa: number
 }
 
-async function fetchRealisasiAkun(): Promise<{ data: RealisasiAkunDto[]; summary: Summary }> {
+interface Meta {
+  mode: 'opd' | 'aggregate' | 'global'
+  opdCount: number
+  opdNames: string[]
+}
+
+async function fetchRealisasiAkun(): Promise<{
+  data: RealisasiAkunDto[]
+  summary: Summary
+  meta: Meta
+}> {
   const res = await fetch('/api/realisasi/akun')
   if (!res.ok) throw new Error('Gagal memuat realisasi')
-  return (await res.json()) as { data: RealisasiAkunDto[]; summary: Summary }
+  return (await res.json()) as { data: RealisasiAkunDto[]; summary: Summary; meta: Meta }
 }
 
 const GROUPS = [
@@ -55,6 +65,7 @@ export function RealisasiAkunSection() {
 
   const items = data?.data ?? []
   const summary = data?.summary
+  const meta = data?.meta
   const { isVisible } = useLevelFilter()
 
   const byGroup = useMemo(() => {
@@ -97,6 +108,30 @@ export function RealisasiAkunSection() {
       {isError && (
         <p className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
           Gagal memuat data realisasi.
+        </p>
+      )}
+
+      {/* Keterangan asal data: kumpulan semua OPD menjadi satu konsolidasi */}
+      {meta && meta.mode === 'aggregate' && (
+        <p className="mb-4 flex flex-wrap items-center gap-1.5 rounded-lg border border-[#17408b]/20 bg-[#17408b]/5 px-3 py-2 text-xs text-foreground/80">
+          <Layers className="h-3.5 w-3.5 shrink-0 text-[#17408b]" aria-hidden="true" />
+          <span>
+            Konsolidasi <strong>{meta.opdCount} OPD/SKPD</strong> — nilai per kode rekening adalah
+            penjumlahan seluruh LRA OPD yang telah diimpor
+            {meta.opdNames.length > 0 && (
+              <span className="text-muted-foreground"> ({meta.opdNames.join(', ')})</span>
+            )}
+            .
+          </span>
+        </p>
+      )}
+      {meta && meta.mode === 'global' && (
+        <p className="mb-4 flex flex-wrap items-center gap-1.5 rounded-lg border border-muted-foreground/20 bg-muted/30 px-3 py-2 text-xs text-foreground/80">
+          <Layers className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <span>
+            Menampilkan data konsolidasi (global). Nilai per OPD akan tergabung otomatis di sini
+            setelah setiap OPD/SKPD mengimpor LRA-nya.
+          </span>
         </p>
       )}
 

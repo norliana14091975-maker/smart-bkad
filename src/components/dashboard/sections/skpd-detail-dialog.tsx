@@ -23,7 +23,7 @@ import {
 import { levelBadge } from '@/lib/kode-akun'
 import { useLevelFilter } from '@/hooks/use-level-filter'
 import { LevelFilterControls } from '@/components/dashboard/level-filter-controls'
-import { formatPct, formatRupiah0 } from '@/lib/format'
+import { formatPct, formatRupiah } from '@/lib/format'
 import type { RealisasiAkunDto } from '@/types/budget'
 
 const AKUN_GROUPS: { key: string; label: string }[] = [
@@ -134,10 +134,10 @@ export function SkpdDetailDialog({
                               </div>
                             </TableCell>
                             <TableCell className="text-right tabular-nums">
-                              {formatRupiah0(item.anggaran)}
+                              {formatRupiah(item.anggaran)}
                             </TableCell>
                             <TableCell className="text-right tabular-nums">
-                              {formatRupiah0(item.realisasi)}
+                              {formatRupiah(item.realisasi)}
                             </TableCell>
                             <TableCell className="text-right tabular-nums font-semibold text-[#17408b]">
                               {formatPct(item.pct)}

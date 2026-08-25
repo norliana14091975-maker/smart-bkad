@@ -35,7 +35,7 @@ import {
 import { levelBadge } from '@/lib/kode-akun'
 import { useLevelFilter } from '@/hooks/use-level-filter'
 import { LevelFilterControls } from '@/components/dashboard/level-filter-controls'
-import { formatPct, formatRupiah0 } from '@/lib/format'
+import { formatPct, formatRupiah } from '@/lib/format'
 import type {
   ImportItemDto,
   ImportLogDto,
@@ -382,8 +382,8 @@ export function ImportLraPanel({ mode }: { mode: 'admin' | 'opd' }) {
                           <span className="text-sm">{item.name}</span>
                         </div>
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">{formatRupiah0(item.anggaran)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatRupiah0(item.realisasi)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{formatRupiah(item.anggaran)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{formatRupiah(item.realisasi)}</TableCell>
                       <TableCell className="text-right tabular-nums font-semibold text-[#17408b]">
                         {formatPct(item.pct)}
                       </TableCell>
