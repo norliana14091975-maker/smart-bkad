@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireAdmin, unauthorized } from '@/lib/auth'
-import { getLraSync, lraTotal } from '@/lib/lra-sync'
+import { getLraSync, getLraYearOptions, lraTotal, resolveDefaultSyncYear } from '@/lib/lra-sync'
 
 /**
  * Sinkronisasi data APBD dari LRA yang telah diupload/diimport
@@ -84,16 +84,32 @@ function buildPlan(
   return { year, items, itemCounts: counts, totals }
 }
 
-/** GET: pratinjau sinkronisasi (tanpa menulis ke database). */
-export async function GET() {
+/** GET: pratinjau sinkronisasi (tanpa menulis ke database).
+ * Query `?year=` opsional — tahun anggaran LRA yang menjadi sumber
+ * sinkronisasi (mis. 2025 untuk data pembanding). Bila kosong memakai
+ * tahun import LRA terakhir, fallback tahun data terbaru. */
+export async function GET(req: Request) {
   try {
     const user = await requireAdmin()
     if (!user) return unauthorized()
 
-    const sync = await getLraSync()
-    // Tahun anggaran target = tahun LRA terbaru (dibaca dari dokumen saat
-    // import), fallback tahun kalender berjalan
-    const year = sync.year ?? new Date().getFullYear()
+    const url = new URL(req.url)
+    const yearRaw = url.searchParams.get('year')
+    const requested = yearRaw ? Number(yearRaw) : NaN
+    const requestedYear =
+      Number.isInteger(requested) && requested >= 2000 && requested <= 2100 ? requested : null
+
+    // Opsi tahun LRA yang tersedia + tahun default (import terakhir)
+    const [years, defaultYear] = await Promise.all([
+      getLraYearOptions(),
+      resolveDefaultSyncYear(),
+    ])
+
+    // Pratinjau mengikuti tahun terpilih/default — BUKAN selalu tahun terbaru,
+    // agar data LRA tahun lama (pembanding) ikut terbaca
+    const selectedYear = requestedYear ?? defaultYear
+    const sync = await getLraSync(selectedYear)
+    const year = sync.year ?? selectedYear ?? new Date().getFullYear()
     const plan = sync.available ? buildPlan(sync.rows, year) : null
     const existingYearItems = plan
       ? await db.budgetItem.count({ where: { year: plan.year } })
@@ -110,6 +126,9 @@ export async function GET() {
         periodeLabel: sync.periodeLabel,
         plan,
         existingYearItems,
+        years,
+        defaultYear,
+        selectedYear,
       },
     })
   } catch (error) {
@@ -118,35 +137,43 @@ export async function GET() {
   }
 }
 
-/** POST: jalankan sinkronisasi — tulis item anggaran + ringkasan APBD. */
+/** POST: jalankan sinkronisasi — tulis item anggaran + ringkasan APBD.
+ * Body `year` opsional — tahun anggaran LRA sumber sekaligus target tulis.
+ * Baris LRA SELALU diambil dari tahun yang sama agar data antar tahun
+ * tidak tercampur. */
 export async function POST(req: Request) {
   try {
     const user = await requireAdmin()
     if (!user) return unauthorized()
 
-    const sync = await getLraSync()
+    const body = (await req.json().catch(() => ({}))) as { year?: unknown }
+    // Tahun anggaran sumber+target: dari body (override manual), bila kosong
+    // mengikuti tahun import LRA terakhir — bukan tahun kalender — agar data
+    // pembanding jatuh pada tahun anggaran yang benar
+    let explicitYear: number | null = null
+    if (body.year !== undefined && body.year !== null && body.year !== '') {
+      const n = Number(body.year)
+      if (!Number.isInteger(n) || n < 2000 || n > 2100) {
+        return NextResponse.json({ error: 'Tahun anggaran tidak valid' }, { status: 400 })
+      }
+      explicitYear = n
+    }
+
+    const targetYear = explicitYear ?? (await resolveDefaultSyncYear())
+    // Sumber baris LRA mengikuti tahun target (bukan selalu tahun terbaru)
+    const sync = await getLraSync(targetYear)
     if (!sync.available) {
       return NextResponse.json(
         {
-          error:
-            'Belum ada data LRA yang dapat disinkronkan. Import LRA terlebih dahulu melalui menu Import LRA (PDF).',
+          error: targetYear
+            ? `Belum ada data LRA tahun ${targetYear} yang dapat disinkronkan. Import LRA tahun tersebut terlebih dahulu melalui menu Import LRA (PDF).`
+            : 'Belum ada data LRA yang dapat disinkronkan. Import LRA terlebih dahulu melalui menu Import LRA (PDF).',
         },
         { status: 400 },
       )
     }
 
-    const body = (await req.json().catch(() => ({}))) as { year?: unknown }
-    // Tahun anggaran target: dari body (override manual), bila kosong
-    // mengikuti TAHUN LRA yang dibaca dari dokumen saat import — bukan
-    // tahun kalender — agar data pembanding jatuh pada tahun yang benar
-    const year =
-      body.year === undefined || body.year === null || body.year === ''
-        ? (sync.year ?? new Date().getFullYear())
-        : Number(body.year)
-    if (!Number.isInteger(year) || year < 2000 || year > 2100) {
-      return NextResponse.json({ error: 'Tahun anggaran tidak valid' }, { status: 400 })
-    }
-
+    const year = sync.year ?? new Date().getFullYear()
     const plan = buildPlan(sync.rows, year)
 
     // Nilai anggaran LRA → baseline APBD (murni) sekaligus APBDP (perubahan)

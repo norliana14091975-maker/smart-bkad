@@ -484,3 +484,24 @@ Stage Summary:
 - Sinkronisasi APBD/anggaran memakai tahun LRA (bukan tahun kalender); dashboard publik mengikuti tahun anggaran terbaru
 - Migrasi: data global lama dilabeli TA 2025, OPD (Dinkes/BKAD) TA 2026; unique key realisasi menjadi [code,scope,periode,year]
 - State akhir DB = state pengguna dipulihkan persis (2 OPD TA 2026 periode 7 + global TA 2025; 16 item anggaran 2026; apbd_summary 2025+2026); backup pra-migrasi di /tmp/backup-pre-year.db
+
+---
+Task ID: 23
+Agent: Z.ai Code (main)
+Task: "Sinkron Dari LRA tahun 2025 tidak terbaca" — tombol Sinkron dari LRA hanya membaca tahun data TERBARU (2026, agregat OPD) sehingga LRA TA 2025 (konsolidasi global "LRA Desember 2025 BUD.pdf") tidak pernah terbaca sebagai sumber sinkronisasi
+
+Work Log:
+- Diagnosis: getLraSync() di src/lib/lra-sync.ts memfilter baris realisasi_akun dengan maxYear secara hardcoded (2026) → data LRA TA 2025 (scope global, 143 baris, periode 12) tidak pernah diikutsertakan; ditemukan juga bug laten pada POST /api/admin/sync-lra: baris LRA diambil dari tahun terbaru tetapi ditulis ke tahun body.year (data antar tahun bisa tercampur)
+- src/lib/lra-sync.ts: getLraSync(year?) — parameter tahun opsional; baris yang dikembalikan SELALU dari tahun terpilih (default tetap tahun terbaru agar halaman publik tak berubah); tambah getLraYearOptions() (daftar TA tersedia + mode aggregate/global + opdCount/opdNames + periode + rowCount, terbaru dulu) dan resolveDefaultSyncYear() (tahun import LRA terakhir berstatus confirmed yang masih punya baris; fallback tahun terbaru; null bila kosong)
+- src/app/api/admin/sync-lra/route.ts: GET menerima ?year= (validasi 2000..2100), respons menambah years[], defaultYear, selectedYear; pratinjau mengikuti tahun terpilih/default; POST memvalidasi body.year lalu memanggil getLraSync(targetYear) sehingga SUMBER baris = tahun target (bug mismatch diperbaiki), body kosong → resolveDefaultSyncYear(); pesan error kini menyebut tahun ("Belum ada data LRA tahun 2030 …")
+- src/components/dashboard/sync-lra-button.tsx: dialog menambah pemilih "Tahun Anggaran Sumber LRA" (shadcn Select) dengan label "TA 2025 — Konsolidasi · s.d. Desember (Setahun)" / "TA 2026 — 2 OPD · s.d. Juli"; default = tahun import terakhir; ganti tahun memuat ulang pratinjau (GET ?year=) dengan indikator loading; catatan amber bila tahun terpilih lebih lama dari data terbaru; POST mengirim {year: terpilih}; tombol sinkron disabled saat pemuatan tahun
+- Backup pra-uji: /tmp/task23-backup-budget-items.json (16 item TA 2026) + /tmp/task23-backup-apbd.json (2025 bernilai 0 semua, 2026 utuh)
+- Uji curl (login admin/admin123): GET default → selectedYear/defaultYear 2025, mode global, s.d. Desember, plan 14 item (pendapatan 1.114.854.317.574 / belanja 228.987.108.289,58 / terima 76.311.275.869,78); GET ?year=2026 → agregat 2 OPD s.d. Juli, plan 16 item; POST {year:2030} → 400 dengan pesan tahun; POST {year:2025} → 14 item dibuat, budget_item 2026 tetap 16, apbd_summary 2025 terisi nilai LRA (sebelumnya 0) — sinkronisasi 2025 dibiarkan aktif karena itulah aksi yang diminta pengguna (apbd_summary 2025 lama bernilai nol)
+- /api/apbd publik: meta tetap TA 2026 (s.d. Juli, 2 OPD); tabel kini menampilkan baris TA 2025 sebagai data pembanding
+- agent-browser: login admin → Kelola Data APBD → dialog Sinkron dari LRA: pemilih tahun tampil dengan default "TA 2025 — Konsolidasi · s.d. Desember (Setahun)", Target TA 2025 + catatan "TA 2025 lebih lama dari data LRA terbaru (TA 2026)"; ganti ke TA 2026 → sumber 2 OPD (BKAD + Dinkes), s.d. Juli, Target TA 2026; kembali ke TA 2025 normal; dialog ditutup tanpa sinkron ulang; 0 error konsol; dev.log bersih (semua /api/admin/sync-lra 200); lint bersih
+
+Stage Summary:
+- Sinkron dari LRA kini MAMPU MEMBACA TAHUN 2025 (dan TA lain): dialog memiliki pemilih tahun sumber; default mengikuti tahun import LRA terakhir; data tahun lain tetap tersimpan sebagai pembanding tanpa tercampur
+- Bug diperbaiki: POST sinkron tidak lagi menulis baris LRA tahun terbaru ke tahun target yang berbeda (sumber baris = tahun target)
+- Halaman publik tak berubah perilaku (masih TA terbaru 2026); apbd_summary + budget_item TA 2025 kini berisi hasil sinkron LRA BUD 2025 yang sebelumnya gagal terbaca
+- State akhir DB: realisasi_akun TA 2025 global (143) + TA 2026 opd:1/opd:4; budget_item TA 2025 = 14 item, TA 2026 = 16 item (utuh); backup pra-uji di /tmp/task23-backup-*.json

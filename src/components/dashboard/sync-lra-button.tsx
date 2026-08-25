@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { RefreshCw } from 'lucide-react'
+import { CalendarRange, RefreshCw } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { Button } from '@/components/ui/button'
 import {
@@ -13,6 +13,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatRupiah0 } from '@/lib/format'
 
@@ -22,30 +29,57 @@ interface SyncPlanDto {
   totals: { pendapatan: number; belanja: number; terima: number; keluar: number }
 }
 
+/** Opsi tahun anggaran LRA yang tersedia sebagai sumber sinkronisasi. */
+interface LraYearOptionDto {
+  year: number
+  mode: 'aggregate' | 'global'
+  opdCount: number
+  opdNames: string[]
+  periode: number | null
+  periodeLabel: string | null
+  rowCount: number
+}
+
 interface SyncPreviewDto {
   available: boolean
   mode: 'aggregate' | 'global'
   opdCount: number
   opdNames: string[]
-  /** Tahun anggaran LRA terbaru (dibaca dari dokumen saat import) */
+  /** Tahun anggaran LRA yang sedang dipratinjau */
   year: number | null
   periode: number | null
   periodeLabel: string | null
   plan: SyncPlanDto | null
   existingYearItems: number
+  /** Daftar tahun LRA tersedia (terbaru dulu) untuk pemilih tahun */
+  years: LraYearOptionDto[]
+  /** Tahun default = tahun import LRA terakhir */
+  defaultYear: number | null
+  /** Tahun yang sedang dipilih pada pratinjau ini */
+  selectedYear: number | null
 }
 
-async function fetchPreview(): Promise<SyncPreviewDto> {
-  const res = await fetch('/api/admin/sync-lra')
+async function fetchPreview(year?: number | null): Promise<SyncPreviewDto> {
+  const qs = year ? `?year=${year}` : ''
+  const res = await fetch(`/api/admin/sync-lra${qs}`)
   if (!res.ok) throw new Error('Gagal memuat pratinjau sinkronisasi')
   const json = (await res.json()) as { data: SyncPreviewDto }
   return json.data
 }
 
+/** Label ringkas satu opsi tahun: "TA 2025 — Konsolidasi · s.d. Desember". */
+function yearOptionLabel(o: LraYearOptionDto): string {
+  const sumber = o.mode === 'aggregate' ? `${o.opdCount} OPD` : 'Konsolidasi'
+  const periode = o.periodeLabel ?? '-'
+  return `TA ${o.year} — ${sumber} · ${periode}`
+}
+
 /**
  * Tombol sinkronisasi anggaran dari LRA yang telah diimport:
  * mengambil anggaran LRA (level jenis) → item anggaran + ringkasan APBD
- * tahun anggaran berjalan. Dipakai di Kelola Data APBD & Kelola Item Anggaran.
+ * tahun anggaran terpilih. Tahun sumber dapat dipilih (mis. TA 2025 data
+ * pembanding); default mengikuti tahun import LRA terakhir.
+ * Dipakai di Kelola Data APBD & Kelola Item Anggaran.
  */
 export function SyncLraButton({ size = 'sm' }: { size?: 'sm' | 'default' }) {
   const { toast } = useToast()
@@ -53,8 +87,10 @@ export function SyncLraButton({ size = 'sm' }: { size?: 'sm' | 'default' }) {
 
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [yearLoading, setYearLoading] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [preview, setPreview] = useState<SyncPreviewDto | null>(null)
+  const [selectedYear, setSelectedYear] = useState<number | null>(null)
 
   async function openDialog() {
     setLoading(true)
@@ -62,11 +98,27 @@ export function SyncLraButton({ size = 'sm' }: { size?: 'sm' | 'default' }) {
     try {
       const data = await fetchPreview()
       setPreview(data)
+      setSelectedYear(data.selectedYear ?? data.defaultYear ?? data.year)
     } catch (err) {
       toast({ title: 'Gagal memuat pratinjau', description: String(err), variant: 'destructive' })
       setOpen(false)
     } finally {
       setLoading(false)
+    }
+  }
+
+  /** Ganti tahun sumber LRA lalu muat ulang pratinjau tahun tersebut. */
+  async function changeYear(year: number) {
+    if (year === selectedYear) return
+    setSelectedYear(year)
+    setYearLoading(true)
+    try {
+      const data = await fetchPreview(year)
+      setPreview(data)
+    } catch (err) {
+      toast({ title: 'Gagal memuat pratinjau', description: String(err), variant: 'destructive' })
+    } finally {
+      setYearLoading(false)
     }
   }
 
@@ -76,7 +128,7 @@ export function SyncLraButton({ size = 'sm' }: { size?: 'sm' | 'default' }) {
       const res = await fetch('/api/admin/sync-lra', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ year: preview?.plan?.year }),
+        body: JSON.stringify({ year: selectedYear ?? preview?.plan?.year }),
       })
       const json = (await res.json()) as {
         data?: { year: number; createdItems: number }
@@ -104,6 +156,10 @@ export function SyncLraButton({ size = 'sm' }: { size?: 'sm' | 'default' }) {
   }
 
   const plan = preview?.plan ?? null
+  const years = preview?.years ?? []
+  // Catatan bila tahun terpilih lebih lama dari data LRA terbaru
+  const isOlderYear =
+    years.length > 0 && selectedYear != null && selectedYear < years[0].year
 
   return (
     <>
@@ -122,9 +178,9 @@ export function SyncLraButton({ size = 'sm' }: { size?: 'sm' | 'default' }) {
             <DialogTitle>Sinkronisasi Data dari LRA</DialogTitle>
             <DialogDescription>
               Mengambil anggaran dari LRA yang telah diimport ke item anggaran dan
-              ringkasan APBD. Tahun anggaran target mengikuti tahun yang terbaca
-              dari dokumen LRA (bukan tahun kalender), sehingga data pembanding
-              jatuh pada tahun anggaran yang benar.
+              ringkasan APBD. Pilih tahun anggaran LRA sebagai sumber — default
+              mengikuti tahun import terakhir, dan tahun lain tetap terbaca
+              sebagai data pembanding.
             </DialogDescription>
           </DialogHeader>
 
@@ -136,11 +192,54 @@ export function SyncLraButton({ size = 'sm' }: { size?: 'sm' | 'default' }) {
             </div>
           ) : !preview?.available || !plan ? (
             <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
-              Belum ada data LRA yang dapat disinkronkan. Import LRA terlebih dahulu
-              melalui menu <strong>Import LRA (PDF)</strong>.
+              Belum ada data LRA yang dapat disinkronkan
+              {selectedYear ? ` untuk tahun anggaran ${selectedYear}` : ''}. Import
+              LRA terlebih dahulu melalui menu <strong>Import LRA (PDF)</strong>.
             </p>
           ) : (
             <div className="space-y-4">
+              {/* Pemilih tahun anggaran sumber LRA */}
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="sync-lra-year"
+                  className="text-sm font-medium text-foreground"
+                >
+                  Tahun Anggaran Sumber LRA
+                </label>
+                <Select
+                  value={selectedYear != null ? String(selectedYear) : undefined}
+                  onValueChange={(v) => changeYear(Number(v))}
+                  disabled={yearLoading || syncing || years.length === 0}
+                >
+                  <SelectTrigger id="sync-lra-year" className="w-full">
+                    <CalendarRange
+                      className="h-4 w-4 shrink-0 text-muted-foreground"
+                      aria-hidden="true"
+                    />
+                    <SelectValue placeholder="Pilih tahun anggaran LRA" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {years.map((o) => (
+                      <SelectItem key={o.year} value={String(o.year)}>
+                        {yearOptionLabel(o)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {yearLoading ? (
+                  <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <RefreshCw className="h-3 w-3 animate-spin" aria-hidden="true" />
+                    Memuat pratinjau TA {selectedYear}…
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    {years.length > 1
+                      ? 'Data LRA tahun lain tersimpan sebagai pembanding dan tidak tercampur.'
+                      : 'Hanya ada satu tahun anggaran LRA yang terimport.'}
+                  </p>
+                )}
+              </div>
+
               {/* Sumber data */}
               <div className="rounded-md border bg-muted/40 p-3 text-sm">
                 <p className="font-semibold text-foreground">Sumber data LRA</p>
@@ -153,13 +252,17 @@ export function SyncLraButton({ size = 'sm' }: { size?: 'sm' | 'default' }) {
                   <li>
                     Tahun anggaran:{' '}
                     <span className="font-semibold text-foreground">
-                      TA {preview.plan?.year ?? preview.year ?? '-'}
+                      TA {plan.year}
                     </span>
-                    {preview.plan && preview.year && preview.plan.year === preview.year && (
-                      <span className="ml-1">(terbaca dari dokumen LRA)</span>
-                    )}
+                    <span className="ml-1">(terbaca dari dokumen LRA)</span>
                   </li>
                   <li>Periode realisasi: {preview.periodeLabel ?? '-'}</li>
+                  {isOlderYear && (
+                    <li className="text-amber-700">
+                      TA {selectedYear} lebih lama dari data LRA terbaru (TA{' '}
+                      {years[0].year}) — pastikan tahun target sudah benar.
+                    </li>
+                  )}
                 </ul>
               </div>
 
@@ -224,7 +327,7 @@ export function SyncLraButton({ size = 'sm' }: { size?: 'sm' | 'default' }) {
             </Button>
             <Button
               onClick={handleSync}
-              disabled={loading || syncing || !preview?.available || !plan}
+              disabled={loading || yearLoading || syncing || !preview?.available || !plan}
               className="bg-[#17408b] text-white hover:bg-[#12326e]"
             >
               {syncing ? (

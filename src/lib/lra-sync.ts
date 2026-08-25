@@ -6,10 +6,10 @@ import type { BudgetItemDto } from '@/types/budget'
 /**
  * Sinkronisasi anggaran (APBD / Pendapatan / Belanja / Pembiayaan) dengan
  * data LRA yang masuk (hasil import). Sumber: agregat seluruh OPD pada
- * TAHUN ANGGARAN TERBARU; per OPD dipakai periode TERAKHIR pada tahun tsb.
- * Bila belum ada OPD yang mengimpor, pakai data konsolidasi (scope global)
- * pada tahun terbarunya. Bila keduanya tidak ada, seksi tetap memakai data
- * statis (baseline).
+ * TAHUN ANGGARAN TERPILIH (`year`, default tahun terbaru); per OPD dipakai
+ * periode TERAKHIR pada tahun tsb. Bila belum ada OPD yang mengimpor, pakai
+ * data konsolidasi (scope global) pada tahun tsb. Bila keduanya tidak ada,
+ * seksi tetap memakai data statis (baseline).
  */
 
 export interface LraSyncRow {
@@ -33,13 +33,21 @@ export interface LraSyncInfo {
   rows: LraSyncRow[]
 }
 
-/** Ambil agregat LRA terimport (anggaran + realisasi) untuk sinkronisasi. */
-export async function getLraSync(): Promise<LraSyncInfo> {
+/**
+ * Ambil agregat LRA terimport (anggaran + realisasi) untuk sinkronisasi.
+ * `year` opsional: tahun anggaran sumber yang SPESIFIK (mis. 2025 untuk data
+ * pembanding). Bila kosong memakai tahun data terbaru. Baris yang
+ * dikembalikan SELALU berasal dari tahun tersebut — bukan tahun kalender —
+ * sehingga sinkronisasi tidak mencampur data antar tahun.
+ */
+export async function getLraSync(year?: number | null): Promise<LraSyncInfo> {
   const all = await db.realisasiAkun.findMany()
 
-  // Tahun anggaran terbaru yang tersedia (data tahun lama menjadi pembanding)
+  // Tahun anggaran sumber: eksplisit dari pemanggil; selain itu tahun
+  // terbaru yang tersedia (data tahun lama menjadi pembanding)
   const maxYear = all.reduce((m, r) => Math.max(m, r.year), 0)
-  const inYear = maxYear > 0 ? all.filter((r) => r.year === maxYear) : []
+  const target = typeof year === 'number' && Number.isInteger(year) && year > 0 ? year : maxYear
+  const inYear = target > 0 ? all.filter((r) => r.year === target) : []
 
   const opdRows = inYear.filter((r) => r.scope !== 'global')
   let base
@@ -119,11 +127,90 @@ export async function getLraSync(): Promise<LraSyncInfo> {
     mode,
     opdCount: opdIds.size,
     opdNames,
-    year: maxYear > 0 ? maxYear : null,
+    year: target > 0 ? target : null,
     periode: periode || null,
     periodeLabel: periode ? labelPeriode(periode) : null,
     rows,
   }
+}
+
+/** Opsi tahun anggaran LRA untuk pemilihan sumber sinkronisasi. */
+export interface LraYearOption {
+  year: number
+  /** 'aggregate' = gabungan OPD/SKPD, 'global' = konsolidasi (BUD) */
+  mode: 'aggregate' | 'global'
+  opdCount: number
+  opdNames: string[]
+  periode: number | null
+  periodeLabel: string | null
+  rowCount: number
+}
+
+/**
+ * Daftar TAHUN ANGGARAN LRA yang tersedia untuk disinkronkan (dari tabel
+ * realisasi_akun), terbaru lebih dulu. Dipakai kontrol pemilih tahun pada
+ * dialog sinkronisasi agar data tahun lama (pembanding) ikut terbaca.
+ */
+export async function getLraYearOptions(): Promise<LraYearOption[]> {
+  const all = await db.realisasiAkun.findMany({
+    select: { year: true, scope: true, opdId: true, periode: true },
+  })
+  const years = [...new Set(all.map((r) => r.year))].sort((a, b) => b - a)
+  if (years.length === 0) return []
+
+  // Nama OPD untuk label opsi (sekali query untuk semua tahun)
+  const opdIds = new Set<number>()
+  for (const r of all) if (r.opdId) opdIds.add(r.opdId)
+  const opds =
+    opdIds.size > 0
+      ? await db.opd.findMany({ where: { id: { in: [...opdIds] } }, select: { id: true, name: true } })
+      : []
+  const nameById = new Map(opds.map((o) => [o.id, o.name]))
+
+  return years.map((y) => {
+    const rows = all.filter((r) => r.year === y)
+    const ids = new Set<number>()
+    for (const r of rows) {
+      if (r.scope !== 'global' && r.opdId) ids.add(r.opdId)
+    }
+    // Prioritas sumber sama dengan getLraSync: OPD bila ada, selain itu global
+    const useOpd = ids.size > 0
+    const periode = rows.reduce((m, r) => Math.max(m, r.periode), 0)
+    const option: LraYearOption = {
+      year: y,
+      mode: useOpd ? 'aggregate' : 'global',
+      opdCount: useOpd ? ids.size : 0,
+      opdNames: useOpd
+        ? [...ids]
+            .map((id) => nameById.get(id))
+            .filter((n): n is string => !!n)
+            .sort((a, b) => a.localeCompare(b))
+        : [],
+      periode: periode || null,
+      periodeLabel: periode ? labelPeriode(periode) : null,
+      rowCount: rows.length,
+    }
+    return option
+  })
+}
+
+/**
+ * Tahun sumber sinkronisasi DEFAULT: tahun dari import LRA TERAKHIR yang
+ * berstatus confirmed dan masih memiliki baris realisasi (apa yang baru
+ * saja diunggah pengguna); fallback tahun data terbaru. Null bila belum
+ * ada data LRA sama sekali.
+ */
+export async function resolveDefaultSyncYear(): Promise<number | null> {
+  const latest = await db.importLog.findFirst({
+    where: { status: 'confirmed' },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    select: { year: true },
+  })
+  const all = await db.realisasiAkun.findMany({ select: { year: true } })
+  const years = [...new Set(all.map((r) => r.year))].sort((a, b) => b - a)
+  if (years.length === 0) return null
+  if (latest && years.includes(latest.year)) return latest.year
+  return years[0]
 }
 
 /** Meta ringkas untuk respons API dan badge UI. */
