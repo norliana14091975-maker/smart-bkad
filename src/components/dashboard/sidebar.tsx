@@ -191,9 +191,10 @@ export function SidebarNav({ active, onSelect, className, user, onLoginClick, on
     <div className={cn('flex h-full flex-col bg-[#1b2a4a] text-slate-200', className)}>
       {/* Brand */}
       <div className="flex items-center gap-2 border-b border-white/10 px-4 py-4">
-        {settings.logoUrl ? (
+        {/* Logo pojok kiri atas: pengaturan khusus sidebar, fallback ke logo utama */}
+        {settings.sidebarLogoUrl || settings.logoUrl ? (
           <img
-            src={settings.logoUrl}
+            src={settings.sidebarLogoUrl ?? settings.logoUrl ?? undefined}
             alt={settings.appName}
             className="h-9 w-9 shrink-0 rounded object-contain"
           />

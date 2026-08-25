@@ -308,3 +308,18 @@ Work Log:
 
 Stage Summary:
 - Seluruh seksi anggaran (APBD, Pendapatan, Belanja, Pembiayaan) kini otomatis mengikuti data LRA yang masuk: anggaran tahun berjalan dihitung dari agregat LRA seluruh OPD (periode terbaru tiap OPD), tahun sebelumnya tetap baseline sebagai pembanding, badge hijau menandai status sinkron + jumlah OPD + periode; tanpa LRA tampilan kembali ke baseline — import LRA baru langsung tercermin di semua seksi
+
+---
+Task ID: 15
+Agent: Z.ai Code (main)
+Task: Pengaturan terpisah untuk logo pojok kiri atas (sidebar)
+
+Work Log:
+- Types + default-settings + lib/settings: AppSettingsDto + sidebarLogoUrl (raw; fallback ke logoUrl diselesaikan di sisi tampilan agar UI dapat membedakan "kustom" vs "mengikuti logo utama")
+- API baru /api/admin/settings/sidebar-logo: POST unggah (magic-byte validation, maks 2 MB, simpan public/uploads/app-sidebar-logo.<ext> + cache-buster) dan DELETE (hapus file + kunci appSetting); route reset ikut menghapus app-sidebar-logo
+- UI sidebar: brand pojok kiri memakai settings.sidebarLogoUrl ?? settings.logoUrl ?? DkiEmblem (fallback berjenjang)
+- UI Pengaturan Aplikasi: kartu baru "Logo Pojok Kiri (Sidebar)" — preview di atas latar gelap sidebar (agar logo terlihat seperti di aplikasi), status "Logo pojok kiri kustom aktif" / "Mengikuti Logo Aplikasi" / "Menggunakan emblem bawaan", tombol Unggah/Hapus (hapus = kembali mengikuti Logo Aplikasi); deskripsi kartu Logo Aplikasi diperjelas ("pita header + fallback pojok kiri"); grid logo menjadi 3 kolom di layar besar; kind upload/remove diperluas 'sidebar-logo'
+- Verifikasi: curl upload logo uji (AI-generated badge) → sidebarLogoUrl terisi, logoUrl (GIF user) & favicon tak berubah; browser: pojok kiri = app-sidebar-logo.jpg, header = app-logo.gif (BERBEDA — independen); kartu pengaturan tampil; Hapus → pojok kiri fallback ke logo utama; upload via UI → kustom aktif kembali; persist setelah reload; tanpa error console; lint bersih
+
+Stage Summary:
+- Logo pojok kiri atas (sidebar) kini punya pengaturan tersendiri di Pengaturan Aplikasi — independen dari Logo Aplikasi (header), dengan fallback otomatis ke logo utama bila dihapus/kosong; logo utama, favicon, dan seluruh kustomisasi user lain tidak terpengaruh

@@ -93,9 +93,10 @@ export function AdminSettingsSection() {
   const [draft, setDraft] = useState<Partial<Record<TextKey, string>>>({})
   const [saving, setSaving] = useState(false)
   const [resetOpen, setResetOpen] = useState(false)
-  const [uploading, setUploading] = useState<'logo' | 'favicon' | null>(null)
+  const [uploading, setUploading] = useState<'logo' | 'sidebar-logo' | 'favicon' | null>(null)
 
   const logoInputRef = useRef<HTMLInputElement>(null)
+  const sidebarLogoInputRef = useRef<HTMLInputElement>(null)
   const faviconInputRef = useRef<HTMLInputElement>(null)
 
   const value = (key: TextKey): string => {
@@ -130,10 +131,11 @@ export function AdminSettingsSection() {
     }
   }
 
-  async function uploadImage(kind: 'logo' | 'favicon', file: File) {
-    if (kind === 'logo' ? logoInputRef : faviconInputRef) {
+  async function uploadImage(kind: 'logo' | 'sidebar-logo' | 'favicon', file: File) {
+    const ref =
+      kind === 'logo' ? logoInputRef : kind === 'sidebar-logo' ? sidebarLogoInputRef : faviconInputRef
+    if (ref) {
       // reset nilai input agar file bernama sama bisa diunggah ulang
-      const ref = kind === 'logo' ? logoInputRef : faviconInputRef
       if (ref.current) ref.current.value = ''
     }
     if (!file.type.startsWith('image/')) {
@@ -149,9 +151,19 @@ export function AdminSettingsSection() {
       const fd = new FormData()
       fd.append('file', file)
       const res = await fetch(`/api/admin/settings/${kind}`, { method: 'POST', body: fd })
-      const json = (await res.json()) as { data?: { logoUrl?: string; faviconUrl?: string }; error?: string }
+      const json = (await res.json()) as {
+        data?: { logoUrl?: string; sidebarLogoUrl?: string; faviconUrl?: string }
+        error?: string
+      }
       if (!res.ok || !json.data) throw new Error(json.error ?? 'Gagal mengunggah')
-      toast({ title: kind === 'logo' ? 'Logo diperbarui' : 'Favicon diperbarui' })
+      toast({
+        title:
+          kind === 'logo'
+            ? 'Logo diperbarui'
+            : kind === 'sidebar-logo'
+              ? 'Logo pojok kiri diperbarui'
+              : 'Favicon diperbarui',
+      })
       await queryClient.invalidateQueries({ queryKey: ['settings'] })
     } catch (err) {
       toast({ title: 'Gagal mengunggah', description: String(err), variant: 'destructive' })
@@ -160,11 +172,18 @@ export function AdminSettingsSection() {
     }
   }
 
-  async function removeImage(kind: 'logo' | 'favicon') {
+  async function removeImage(kind: 'logo' | 'sidebar-logo' | 'favicon') {
     try {
       const res = await fetch(`/api/admin/settings/${kind}`, { method: 'DELETE' })
       if (!res.ok) throw new Error('Gagal menghapus')
-      toast({ title: kind === 'logo' ? 'Logo kustom dihapus' : 'Favicon kustom dihapus' })
+      toast({
+        title:
+          kind === 'logo'
+            ? 'Logo kustom dihapus'
+            : kind === 'sidebar-logo'
+              ? 'Logo pojok kiri kembali mengikuti Logo Aplikasi'
+              : 'Favicon kustom dihapus',
+      })
       await queryClient.invalidateQueries({ queryKey: ['settings'] })
     } catch (err) {
       toast({ title: 'Gagal menghapus', description: String(err), variant: 'destructive' })
@@ -256,13 +275,14 @@ export function AdminSettingsSection() {
       </section>
 
       {/* Logo & Favicon */}
-      <div className="mb-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
+      <div className="mb-5 grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
         <section className="rounded-lg border bg-card p-4 shadow-sm sm:p-5">
           <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-foreground/80">
             Logo Aplikasi
           </h3>
           <p className="mb-4 text-xs text-muted-foreground">
-            Tampil di sidebar dan pita header. PNG/JPG/GIF/WebP/SVG/ICO, maks 2 MB.
+            Tampil di pita header (dan jadi fallback logo pojok kiri sidebar).
+            PNG/JPG/GIF/WebP/SVG/ICO, maks 2 MB.
           </p>
           <div className="flex items-center gap-4">
             <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-lg border bg-muted/30 p-2">
@@ -307,6 +327,75 @@ export function AdminSettingsSection() {
                     variant="outline"
                     size="sm"
                     onClick={() => removeImage('logo')}
+                    className="text-destructive hover:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4" aria-hidden="true" /> Hapus
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-lg border bg-card p-4 shadow-sm sm:p-5">
+          <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-foreground/80">
+            Logo Pojok Kiri (Sidebar)
+          </h3>
+          <p className="mb-4 text-xs text-muted-foreground">
+            Logo kecil di pojok kiri atas aplikasi. Bila kosong, mengikuti Logo Aplikasi.
+            PNG/JPG/GIF/WebP/SVG/ICO, maks 2 MB.
+          </p>
+          <div className="flex items-center gap-4">
+            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-lg border bg-[#1b2a4a] p-2">
+              {isLoading ? (
+                <Skeleton className="h-12 w-12" />
+              ) : data?.sidebarLogoUrl || data?.logoUrl ? (
+                <img
+                  src={data.sidebarLogoUrl ?? data.logoUrl ?? undefined}
+                  alt="Logo pojok kiri"
+                  className="h-14 w-14 rounded object-contain"
+                />
+              ) : (
+                <DkiEmblem className="h-12 w-12" />
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold text-foreground">
+                {data?.sidebarLogoUrl
+                  ? 'Logo pojok kiri kustom aktif'
+                  : data?.logoUrl
+                    ? 'Mengikuti Logo Aplikasi'
+                    : 'Menggunakan emblem bawaan'}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <input
+                  ref={sidebarLogoInputRef}
+                  type="file"
+                  accept="image/*,.ico,.svg"
+                  className="sr-only"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) void uploadImage('sidebar-logo', file)
+                  }}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => sidebarLogoInputRef.current?.click()}
+                  disabled={uploading === 'sidebar-logo'}
+                >
+                  {uploading === 'sidebar-logo' ? (
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Upload className="h-4 w-4" aria-hidden="true" />
+                  )}
+                  Unggah Logo Pojok Kiri
+                </Button>
+                {data?.sidebarLogoUrl && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => removeImage('sidebar-logo')}
                     className="text-destructive hover:text-destructive"
                   >
                     <Trash2 className="h-4 w-4" aria-hidden="true" /> Hapus

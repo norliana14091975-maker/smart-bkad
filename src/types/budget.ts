@@ -150,6 +150,8 @@ export interface AppSettingsDto {
   brandText: string
   brandSubtext: string
   logoUrl: string | null
+  /** Logo khusus pojok kiri atas sidebar (null = mengikuti logoUrl) */
+  sidebarLogoUrl: string | null
   faviconUrl: string | null
   footerText: string
 }

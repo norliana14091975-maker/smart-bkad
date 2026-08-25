@@ -12,6 +12,7 @@ export const DEFAULT_SETTINGS: AppSettingsDto = {
   brandText: 'BPKD',
   brandSubtext: 'Provinsi DKI Jakarta',
   logoUrl: null,
+  sidebarLogoUrl: null,
   faviconUrl: null,
   footerText:
     'Dashboard Monitoring Pengelolaan Keuangan Daerah — Pemerintah Provinsi DKI Jakarta',
