@@ -273,3 +273,20 @@ Work Log:
 
 Stage Summary:
 - ReferenceError formatRupiah diperbaiki dengan menambahkan import; semua tampilan realisasi kini konsisten menampilkan desimal ,00 tanpa runtime error
+
+---
+Task ID: 13
+Agent: Z.ai Code (main)
+Task: Import per periode (bulan) + filter periode bulanan/triwulan/semester untuk memudahkan Kepala Daerah membandingkan — sesuai ketentuan penyampaian LRA (Permendagri: bulanan, triwulanan, semesteran)
+
+Work Log:
+- Schema: RealisasiAkun + kolom periode (kumulatif s.d. bulan ke-1..12, default 12; unique (code, scope, periode); index (scope, periode)); model BARU RealisasiSkpdPeriode (ringkasan SKPD per periode, unique (name, periode)); ImportLog + periode; db push (data existing otomatis periode=12) + restart server (orphan process)
+- src/lib/periode.ts (baru): BULAN, periodeLabel ("s.d. Juli" / "s.d. Desember (Setahun)"), periodeShort, periodePilihan() (Periode Terakhir/Setahun/Semester I-II/Triwulan I-IV/Bulanan Jan-Nov), periodePilihanImport() (LRA s.d. <bulan> 1..12), detectPeriode() — regex header LRA ("01 Januari 2026 Sampai 31 Juli 2026" / "s.d. 31 Mar 2026") → bulan akhir (uji unit 6/6)
+- import-lra.ts confirmLra: param periode (clamp 1..12); replace = deleteMany scope+periode (import periode lain tetap utuh); append = upsert code_scope_periode; ringkasan SKPD disimpan PER PERIODE (RealisasiSkpdPeriode upsert) dan ringkasan utama RealisasiSkpd otomatis menampilkan periode TERAKHIR OPD; importLog menyimpan periode
+- API import (admin & opd): formData 'periode' opsional (1..12); bila kosong → deteksi otomatis dari teks PDF (detectPeriode); respons + periode & periodeLabel; API confirm (admin & opd): kirim periode (fallback ke log.periode)
+- API /api/realisasi/akun: ?periode=N|all&compare=1 — mode 'all' = periode TERAKHIR per OPD; periode=N = paksa periode (OPD tanpa data periode itu fallback ke periode terdekat ≤ N sehingga tetap menyumbang data terbarunya); meta + periode & periodeLabel; compare = total kumulatif per periode tolok-ukur (3/6/9/12 = TW & semester) dengan flag tersedia; /api/opd/me + realisasiPeriode (ringkasan per periode milik OPD); types + RealisasiGroupDto, OpdSelfDto.realisasiPeriode, Meta.periode, CompareRow
+- UI (store global persist, pola sama dgn filter level): src/components/dashboard/periode-filter-controls.tsx — usePeriodeFilter (useSyncExternalStore + localStorage 'bpkd.periodeFilter') & PeriodeFilterControls (select: Periode Terakhir/Setahun/Semester/Triwulan/Bulanan + tombol "Kembali ke Periode Terakhir"); terintegrasi di: realisasi per-akun publik (kontrol + label "Menampilkan realisasi kumulatif s.d. X" + KARTU PEMBANDING per triwulan/semester dgn Penerimaan/Pengeluaran), dialog detail SKPD, dashboard OPD (tabel rincian per periode), import panel (selector "Periode LRA (kumulatif s.d. bulan)" dgn opsi "Deteksi otomatis dari PDF" + badge periode ungu di preview + toast menyebut periode)
+- Uji end-to-end: buat PDF TW I (header "Sampai 31 Maret 2026") → import kecamatan → auto-detect periode 3 "s.d. Maret" ✓; filter periode=3 → data TW1 + dinas fallback periode-12 (kode 4 = 30T + 10,3 M = 30.010.339.384.365 ✓); compare kartu: s.d. Maret & s.d. Desember tersedia; browser: kontrol periode di semua tampilan, pilih Triwulan I → label & data berubah, Kembali ke Periode Terakhir, persist localStorage, dialog SKPD + import panel selector OK; data uji TW1 dibersihkan (kembali ke state: global/25, opd:1/12, opd:3/12); tanpa error console; lint bersih
+
+Stage Summary:
+- Import LRA kini per periode (bulan kumulatif s.d. N, auto-detect dari header PDF atau pilih manual; import periode berbeda tersimpan terpisah); seluruh tampilan realisasi (publik/detail SKPD/dashboard OPD) punya filter periode global persist (bulan/triwulan/semester/setahun/periode terakhir) + kartu pembanding antar periode — Kepala Daerah dapat membandingkan capaian kumulatif antar bulan/triwulan/semester; ringkasan SKPD utama otomatis memakai LRA terbaru tiap OPD

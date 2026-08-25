@@ -7,6 +7,7 @@ import {
   extractLraItems,
   extractPdfText,
 } from '@/lib/import-lra'
+import { detectPeriode, periodeLabel } from '@/lib/periode'
 
 // Pastikan handler berjalan di runtime Node (pdf-parse butuh API Node)
 export const runtime = 'nodejs'
@@ -45,6 +46,15 @@ export async function POST(req: Request) {
       }
     }
 
+    // Periode LRA: prioritas input admin, bila kosong dideteksi otomatis
+    // dari teks PDF ("... Sampai 31 Juli 2026"); default 12 (setahun)
+    let periode = 12
+    const periodeRaw = form?.get('periode')
+    if (typeof periodeRaw === 'string' && periodeRaw) {
+      const n = Number(periodeRaw)
+      if (Number.isInteger(n) && n >= 1 && n <= 12) periode = n
+    }
+
     const buffer = Buffer.from(await file.arrayBuffer())
     // Cek magic bytes: file PDF selalu diawali "%PDF-"
     if (buffer.length < 5 || buffer.subarray(0, 5).toString('latin1') !== '%PDF-') {
@@ -72,6 +82,12 @@ export async function POST(req: Request) {
       )
     }
 
+    // Bila admin tidak menetapkan periode, deteksi dari header LRA
+    if (typeof periodeRaw !== 'string' || !periodeRaw) {
+      const detected = detectPeriode(text)
+      if (detected) periode = detected
+    }
+
     // Ekstraksi & klasifikasi kode rekening per level sesuai aturan BAS
     // Permendagri secara deterministik (parser baris, tanpa AI)
     const { items, stats } = await extractLraItems(text)
@@ -85,6 +101,7 @@ export async function POST(req: Request) {
         records: items.length,
         status: 'parsed',
         opdId,
+        periode,
         message: items.length === 0 ? 'Tidak ada baris LRA terdeteksi dari PDF' : null,
       },
     })
@@ -96,6 +113,8 @@ export async function POST(req: Request) {
         pages,
         opdId,
         opdName: opd?.name ?? null,
+        periode,
+        periodeLabel: periodeLabel(periode),
         items,
         stats,
         textPreview: text.slice(0, 500),

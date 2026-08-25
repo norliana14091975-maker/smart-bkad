@@ -20,6 +20,12 @@ export async function GET() {
 
     const realisasiRow = await db.realisasiSkpd.findUnique({ where: { name: opd.name } })
 
+    // Ringkasan per periode milik OPD (kumulatif s.d. bulan ke-N)
+    const periodeRows = await db.realisasiSkpdPeriode.findMany({
+      where: { name: opd.name },
+      orderBy: { periode: 'asc' },
+    })
+
     const data: OpdSelfDto = {
       opd: {
         id: opd.id,
@@ -36,6 +42,12 @@ export async function GET() {
             pembiayaan: { anggaran: realisasiRow.pembiayaanAnggaran, realisasi: realisasiRow.pembiayaanRealisasi },
           }
         : null,
+      realisasiPeriode: periodeRows.map((p) => ({
+        periode: p.periode,
+        pendapatan: { anggaran: p.pendapatanAnggaran, realisasi: p.pendapatanRealisasi },
+        belanja: { anggaran: p.belanjaAnggaran, realisasi: p.belanjaRealisasi },
+        pembiayaan: { anggaran: p.pembiayaanAnggaran, realisasi: p.pembiayaanRealisasi },
+      })),
     }
     return NextResponse.json({ data })
   } catch (error) {

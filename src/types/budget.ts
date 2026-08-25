@@ -179,6 +179,12 @@ export interface OpdCredentialsDto {
 }
 
 // Data untuk Dashboard OPD (profil + realisasi SKPD miliknya)
+export interface RealisasiGroupDto {
+  pendapatan: { anggaran: number; realisasi: number }
+  belanja: { anggaran: number; realisasi: number }
+  pembiayaan: { anggaran: number; realisasi: number }
+}
+
 export interface OpdSelfDto {
   opd: {
     id: number
@@ -188,9 +194,12 @@ export interface OpdSelfDto {
     active: boolean
     createdAt: string
   }
-  realisasi: {
+  realisasi: RealisasiGroupDto | null
+  /** Ringkasan per periode kumulatif (s.d. bulan ke-N) hasil import LRA */
+  realisasiPeriode?: {
+    periode: number
     pendapatan: { anggaran: number; realisasi: number }
     belanja: { anggaran: number; realisasi: number }
     pembiayaan: { anggaran: number; realisasi: number }
-  } | null
+  }[]
 }

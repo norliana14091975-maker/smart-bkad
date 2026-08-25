@@ -23,6 +23,7 @@ import {
 import { levelBadge } from '@/lib/kode-akun'
 import { useLevelFilter } from '@/hooks/use-level-filter'
 import { LevelFilterControls } from '@/components/dashboard/level-filter-controls'
+import { usePeriodeFilter, PeriodeFilterControls } from '@/components/dashboard/periode-filter-controls'
 import { formatPct, formatRupiah } from '@/lib/format'
 import type { RealisasiAkunDto } from '@/types/budget'
 
@@ -49,11 +50,14 @@ export function SkpdDetailDialog({
   const open = opdId !== null
 
   const { isVisible } = useLevelFilter()
+  const { periode } = usePeriodeFilter()
 
   const detailQuery = useQuery({
-    queryKey: ['skpd-detail-akun', opdId],
+    queryKey: ['skpd-detail-akun', opdId, periode],
     queryFn: async (): Promise<RealisasiAkunDto[]> => {
-      const res = await fetch(`/api/realisasi/akun?opdId=${opdId}`)
+      const params = new URLSearchParams({ opdId: String(opdId) })
+      if (periode !== null) params.set('periode', String(periode))
+      const res = await fetch(`/api/realisasi/akun?${params}`)
       if (!res.ok) throw new Error('Gagal memuat rincian')
       return ((await res.json()) as { data: RealisasiAkunDto[] }).data
     },
@@ -72,6 +76,8 @@ export function SkpdDetailDialog({
             Rincian per kode rekening (L1 Akun … L6 Sub Rincian Obyek) sesuai LRA yang diimpor.
           </DialogDescription>
         </DialogHeader>
+
+        <PeriodeFilterControls className="mb-3" />
 
         <LevelFilterControls />
 

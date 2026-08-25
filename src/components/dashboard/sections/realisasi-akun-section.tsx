@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { CalendarDays, Landmark, Layers, PiggyBank, TrendingUp, Wallet } from 'lucide-react'
+import { CalendarDays, CalendarRange, Landmark, Layers, PiggyBank, TrendingUp, Wallet } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -19,6 +19,7 @@ import { useToday } from '@/hooks/use-today'
 import { levelBadge } from '@/lib/kode-akun'
 import { useLevelFilter } from '@/hooks/use-level-filter'
 import { LevelFilterControls } from '@/components/dashboard/level-filter-controls'
+import { usePeriodeFilter, PeriodeFilterControls } from '@/components/dashboard/periode-filter-controls'
 import { formatDateFromISO, formatPct, formatRupiah, formatTriliun } from '@/lib/format'
 import type { RealisasiAkunDto } from '@/types/budget'
 
@@ -33,16 +34,34 @@ interface Meta {
   mode: 'opd' | 'aggregate' | 'global'
   opdCount: number
   opdNames: string[]
+  periode: number | null
+  periodeLabel: string | null
 }
 
-async function fetchRealisasiAkun(): Promise<{
+interface CompareRow {
+  periode: number
+  label: string
+  penerimaan: number
+  pengeluaran: number
+  tersedia: boolean
+}
+
+async function fetchRealisasiAkun(periode: number | null): Promise<{
   data: RealisasiAkunDto[]
   summary: Summary
   meta: Meta
+  compare?: CompareRow[]
 }> {
-  const res = await fetch('/api/realisasi/akun')
+  const params = new URLSearchParams({ compare: '1' })
+  if (periode !== null) params.set('periode', String(periode))
+  const res = await fetch(`/api/realisasi/akun?${params}`)
   if (!res.ok) throw new Error('Gagal memuat realisasi')
-  return (await res.json()) as { data: RealisasiAkunDto[]; summary: Summary; meta: Meta }
+  return (await res.json()) as {
+    data: RealisasiAkunDto[]
+    summary: Summary
+    meta: Meta
+    compare?: CompareRow[]
+  }
 }
 
 const GROUPS = [
@@ -52,9 +71,11 @@ const GROUPS = [
 ]
 
 export function RealisasiAkunSection() {
+  const { periode } = usePeriodeFilter()
+
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['realisasi-akun'],
-    queryFn: fetchRealisasiAkun,
+    queryKey: ['realisasi-akun', periode],
+    queryFn: () => fetchRealisasiAkun(periode),
   })
 
   // Tanggal hari ini hanya tersedia setelah hidrasi (aman dari mismatch
@@ -66,6 +87,7 @@ export function RealisasiAkunSection() {
   const items = data?.data ?? []
   const summary = data?.summary
   const meta = data?.meta
+  const compare = data?.compare
   const { isVisible } = useLevelFilter()
 
   const byGroup = useMemo(() => {
@@ -133,6 +155,44 @@ export function RealisasiAkunSection() {
             setelah setiap OPD/SKPD mengimpor LRA-nya.
           </span>
         </p>
+      )}
+
+      <PeriodeFilterControls className="mb-4" />
+
+      {/* Label periode aktif */}
+      {meta?.periodeLabel && (
+        <p className="mb-3 flex flex-wrap items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-900">
+          <CalendarRange className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          Menampilkan realisasi kumulatif <strong>&nbsp;{meta.periodeLabel}</strong>
+        </p>
+      )}
+
+      {/* Pembanding antar periode (triwulan & semester) — memudahkan Kepala
+          Daerah membandingkan capaian antar periode sesuai ketentuan LRA */}
+      {compare && compare.some((c) => c.tersedia) && (
+        <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {compare
+            .filter((c) => c.tersedia)
+            .map((c) => (
+              <div key={c.periode} className="rounded-lg border bg-card p-3 shadow-sm">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                  {c.label}
+                </p>
+                <p className="mt-1 text-xs">
+                  <span className="text-muted-foreground">Penerimaan:</span>{' '}
+                  <span className="font-semibold tabular-nums text-[#17408b]">
+                    {formatTriliun(c.penerimaan)}
+                  </span>
+                </p>
+                <p className="text-xs">
+                  <span className="text-muted-foreground">Pengeluaran:</span>{' '}
+                  <span className="font-semibold tabular-nums text-[#b22222]">
+                    {formatTriliun(c.pengeluaran)}
+                  </span>
+                </p>
+              </div>
+            ))}
+        </div>
       )}
 
       <LevelFilterControls className="mb-4" />

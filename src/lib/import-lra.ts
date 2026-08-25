@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { db } from '@/lib/db'
 import { applyHierarchy, normalizeKode, standardNameFor } from '@/lib/kode-akun'
+import { detectPeriode } from '@/lib/periode'
 
 // ---------------------------------------------------------------------------
 // Konstanta import LRA
@@ -317,8 +318,11 @@ export async function confirmLra(params: {
   scope: string
   opdId: number | null
   importLogId: number
+  /** Periode kumulatif LRA (bulan ke-1..12); default 12 */
+  periode?: number
 }): Promise<{ saved: number }> {
   const { items, mode, scope, opdId, importLogId } = params
+  const periode = Math.min(Math.max(Math.round(params.periode ?? 12), 1), 12)
   if (!Array.isArray(items)) throw new Error('Data items tidak valid')
 
   const merged = new Map<string, LraItem>()
@@ -338,13 +342,15 @@ export async function confirmLra(params: {
     level: item.level,
     scope,
     opdId,
+    periode,
     anggaran: item.anggaran,
     realisasi: item.realisasi,
   }))
 
   let saved = 0
   if (mode === 'replace') {
-    await db.realisasiAkun.deleteMany({ where: { scope } })
+    // Hanya ganti baris pada periode yang sama (import periode lain tetap utuh)
+    await db.realisasiAkun.deleteMany({ where: { scope, periode } })
     if (rows.length > 0) {
       await db.realisasiAkun.createMany({ data: rows })
     }
@@ -352,7 +358,7 @@ export async function confirmLra(params: {
   } else {
     for (const row of rows) {
       await db.realisasiAkun.upsert({
-        where: { code_scope: { code: row.code, scope } },
+        where: { code_scope_periode: { code: row.code, scope, periode } },
         update: {
           name: row.name,
           group: row.group,
@@ -386,32 +392,47 @@ export async function confirmLra(params: {
         anggaran: sumByPrefix(lraItems, pemPrefix, 'anggaran'),
         realisasi: sumByPrefix(lraItems, pemPrefix, 'realisasi'),
       }
-      await db.realisasiSkpd.upsert({
-        where: { name: opd.name },
-        update: {
-          pendapatanAnggaran: pendapatan.anggaran,
-          pendapatanRealisasi: pendapatan.realisasi,
-          belanjaAnggaran: belanja.anggaran,
-          belanjaRealisasi: belanja.realisasi,
-          pembiayaanAnggaran: pembiayaan.anggaran,
-          pembiayaanRealisasi: pembiayaan.realisasi,
-        },
-        create: {
-          name: opd.name,
-          pendapatanAnggaran: pendapatan.anggaran,
-          pendapatanRealisasi: pendapatan.realisasi,
-          belanjaAnggaran: belanja.anggaran,
-          belanjaRealisasi: belanja.realisasi,
-          pembiayaanAnggaran: pembiayaan.anggaran,
-          pembiayaanRealisasi: pembiayaan.realisasi,
-        },
+      // Ringkasan per periode (untuk pembanding bulanan/triwulan/semester)
+      const ringkas = {
+        pendapatanAnggaran: pendapatan.anggaran,
+        pendapatanRealisasi: pendapatan.realisasi,
+        belanjaAnggaran: belanja.anggaran,
+        belanjaRealisasi: belanja.realisasi,
+        pembiayaanAnggaran: pembiayaan.anggaran,
+        pembiayaanRealisasi: pembiayaan.realisasi,
+      }
+      await db.realisasiSkpdPeriode.upsert({
+        where: { name_periode: { name: opd.name, periode } },
+        update: ringkas,
+        create: { name: opd.name, periode, ...ringkas },
       })
+
+      // Ringkasan utama menampilkan periode TERAKHIR yang tersedia utk OPD ini
+      const terakhir = await db.realisasiSkpdPeriode.findFirst({
+        where: { name: opd.name },
+        orderBy: { periode: 'desc' },
+      })
+      if (terakhir) {
+        const latest = {
+          pendapatanAnggaran: terakhir.pendapatanAnggaran,
+          pendapatanRealisasi: terakhir.pendapatanRealisasi,
+          belanjaAnggaran: terakhir.belanjaAnggaran,
+          belanjaRealisasi: terakhir.belanjaRealisasi,
+          pembiayaanAnggaran: terakhir.pembiayaanAnggaran,
+          pembiayaanRealisasi: terakhir.pembiayaanRealisasi,
+        }
+        await db.realisasiSkpd.upsert({
+          where: { name: opd.name },
+          update: latest,
+          create: { name: opd.name, ...latest },
+        })
+      }
     }
   }
 
   await db.importLog.updateMany({
     where: { id: importLogId },
-    data: { status: 'confirmed', records: saved },
+    data: { status: 'confirmed', records: saved, periode },
   })
 
   return { saved }

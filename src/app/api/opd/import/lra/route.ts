@@ -7,6 +7,7 @@ import {
   extractLraItems,
   extractPdfText,
 } from '@/lib/import-lra'
+import { detectPeriode, periodeLabel } from '@/lib/periode'
 
 export const runtime = 'nodejs'
 
@@ -37,6 +38,14 @@ export async function POST(req: Request) {
       )
     }
 
+    // Periode LRA: dari input OPD atau deteksi otomatis dari teks PDF
+    let periode = 12
+    const periodeRaw = form?.get('periode')
+    if (typeof periodeRaw === 'string' && periodeRaw) {
+      const n = Number(periodeRaw)
+      if (Number.isInteger(n) && n >= 1 && n <= 12) periode = n
+    }
+
     const buffer = Buffer.from(await file.arrayBuffer())
     if (buffer.length < 5 || buffer.subarray(0, 5).toString('latin1') !== '%PDF-') {
       return NextResponse.json({ error: 'File bukan PDF yang valid' }, { status: 400 })
@@ -63,6 +72,12 @@ export async function POST(req: Request) {
       )
     }
 
+    // Deteksi otomatis bila OPD tidak menetapkan periode
+    if (typeof periodeRaw !== 'string' || !periodeRaw) {
+      const detected = detectPeriode(text)
+      if (detected) periode = detected
+    }
+
     // Ekstraksi & klasifikasi kode rekening per level sesuai aturan BAS
     // Permendagri secara deterministik (parser baris, tanpa AI)
     const { items, stats } = await extractLraItems(text)
@@ -74,6 +89,7 @@ export async function POST(req: Request) {
         records: items.length,
         status: 'parsed',
         opdId: opd.id,
+        periode,
         message: items.length === 0 ? 'Tidak ada baris LRA terdeteksi dari PDF' : null,
       },
     })
@@ -85,6 +101,8 @@ export async function POST(req: Request) {
         pages,
         opdId: opd.id,
         opdName: opd.name,
+        periode,
+        periodeLabel: periodeLabel(periode),
         items,
         stats,
         textPreview: text.slice(0, 500),

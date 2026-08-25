@@ -14,7 +14,7 @@ export async function POST(req: Request) {
     if (!admin) return unauthorized()
 
     const body = (await req.json().catch(() => null)) as
-      | { importLogId?: unknown; items?: unknown; mode?: unknown; opdId?: unknown }
+      | { importLogId?: unknown; items?: unknown; mode?: unknown; opdId?: unknown; periode?: unknown }
       | null
 
     const importLogId = Number(body?.importLogId)
@@ -46,6 +46,13 @@ export async function POST(req: Request) {
       }
     }
 
+    // Periode dari log import (dipakai sebagai kunci penyimpanan)
+    const periodeNum = Number(body?.periode)
+    const periode =
+      Number.isInteger(periodeNum) && periodeNum >= 1 && periodeNum <= 12
+        ? periodeNum
+        : (log.periode ?? 12)
+
     const scope = scopeFor(opdId)
     const { saved } = await confirmLra({
       items: body?.items,
@@ -53,6 +60,7 @@ export async function POST(req: Request) {
       scope,
       opdId,
       importLogId,
+      periode,
     })
 
     return NextResponse.json({ data: { saved } })

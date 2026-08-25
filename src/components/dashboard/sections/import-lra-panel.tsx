@@ -35,6 +35,7 @@ import {
 import { levelBadge } from '@/lib/kode-akun'
 import { useLevelFilter } from '@/hooks/use-level-filter'
 import { LevelFilterControls } from '@/components/dashboard/level-filter-controls'
+import { periodePilihanImport, periodeLabel } from '@/lib/periode'
 import { formatPct, formatRupiah } from '@/lib/format'
 import type {
   ImportItemDto,
@@ -90,6 +91,8 @@ export function ImportLraPanel({ mode }: { mode: 'admin' | 'opd' }) {
   const { isVisible } = useLevelFilter()
 
   const [selectedOpdId, setSelectedOpdId] = useState('') // '' = konsolidasi
+  // periode import: '' = deteksi otomatis dari teks LRA (header "Sampai 31 …")
+  const [importPeriode, setImportPeriode] = useState('')
   const [uploading, setUploading] = useState(false)
   const [result, setResult] = useState<ImportParseResultDto | null>(null)
   const [saveMode, setSaveMode] = useState<'replace' | 'append'>('replace')
@@ -116,6 +119,7 @@ export function ImportLraPanel({ mode }: { mode: 'admin' | 'opd' }) {
       const fd = new FormData()
       fd.append('file', file)
       if (mode === 'admin' && selectedOpdId) fd.append('opdId', selectedOpdId)
+      if (importPeriode) fd.append('periode', importPeriode)
       const res = await fetch(`${base}/lra`, { method: 'POST', body: fd })
       const json = (await res.json()) as { data?: ImportParseResultDto; error?: string }
       if (!res.ok || !json.data) {
@@ -147,6 +151,7 @@ export function ImportLraPanel({ mode }: { mode: 'admin' | 'opd' }) {
         importLogId: result.importLogId,
         items: result.items,
         mode: saveMode,
+        periode: result.periode,
       }
       if (mode === 'admin' && selectedOpdId) body.opdId = Number(selectedOpdId)
       const res = await fetch(`${base}/confirm`, {
@@ -164,7 +169,9 @@ export function ImportLraPanel({ mode }: { mode: 'admin' | 'opd' }) {
             : 'konsolidasi seluruh OPD'
       toast({
         title: 'Import LRA berhasil',
-        description: `${json.data.saved} baris tersimpan untuk ${target}.`,
+        description: `${json.data.saved} baris tersimpan untuk ${target} — periode ${
+          result.periodeLabel ?? 'setahun'
+        }.`,
       })
       setResult(null)
       await queryClient.invalidateQueries({ queryKey: ['import-logs', mode] })
@@ -244,6 +251,33 @@ export function ImportLraPanel({ mode }: { mode: 'admin' | 'opd' }) {
         </div>
       )}
 
+      {/* Pemilih periode import (bulan kumulatif LRA) */}
+      <div className="mb-4 flex flex-wrap items-end gap-3 rounded-lg border bg-muted/30 px-4 py-3">
+        <div>
+          <Label htmlFor="import-periode" className="mb-1 block text-sm font-semibold text-foreground">
+            Periode LRA (kumulatif s.d. bulan)
+          </Label>
+          <select
+            id="import-periode"
+            value={importPeriode}
+            onChange={(e) => setImportPeriode(e.target.value)}
+            className="h-9 w-64 rounded-md border border-input bg-background px-3 text-sm focus:border-[#17408b] focus:outline-none"
+          >
+            <option value="">Deteksi otomatis dari PDF</option>
+            {periodePilihanImport().map((p) => (
+              <option key={p.value} value={String(p.periode)}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <p className="max-w-xs text-[11px] leading-snug text-muted-foreground">
+          Sistem membaca header LRA (mis. “Sampai 31 Juli 2026”) untuk menentukan periode
+          otomatis. Pilih manual bila perlu. Import pada periode berbeda tersimpan terpisah
+          sehingga bisa dibandingkan (bulanan/triwulan/semester).
+        </p>
+      </div>
+
       {/* Dropzone / upload */}
       <div
         role="button"
@@ -319,6 +353,11 @@ export function ImportLraPanel({ mode }: { mode: 'admin' | 'opd' }) {
             >
               {result.opdName ? `OPD: ${result.opdName}` : 'Konsolidasi (seluruh OPD)'}
             </Badge>
+            {result.periodeLabel && (
+              <Badge variant="secondary" className="bg-purple-100 text-purple-800">
+                {result.periodeLabel}
+              </Badge>
+            )}
             {result.stats && (
               <>
                 <Badge variant="secondary" className="bg-green-100 text-green-800">

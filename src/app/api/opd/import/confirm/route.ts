@@ -19,7 +19,7 @@ export async function POST(req: Request) {
     }
 
     const body = (await req.json().catch(() => null)) as
-      | { importLogId?: unknown; items?: unknown; mode?: unknown }
+      | { importLogId?: unknown; items?: unknown; mode?: unknown; periode?: unknown }
       | null
 
     const importLogId = Number(body?.importLogId)
@@ -41,6 +41,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Log import tidak ditemukan untuk OPD ini' }, { status: 400 })
     }
 
+    // Periode mengikuti log import milik OPD (dipakai sebagai kunci simpan)
+    const periodeNum = Number(body?.periode)
+    const periode =
+      Number.isInteger(periodeNum) && periodeNum >= 1 && periodeNum <= 12
+        ? periodeNum
+        : (log.periode ?? 12)
+
     const scope = scopeFor(opd.id)
     const { saved } = await confirmLra({
       items: body?.items,
@@ -48,6 +55,7 @@ export async function POST(req: Request) {
       scope,
       opdId: opd.id,
       importLogId,
+      periode,
     })
 
     return NextResponse.json({ data: { saved } })

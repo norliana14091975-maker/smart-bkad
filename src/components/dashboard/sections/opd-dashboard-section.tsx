@@ -20,6 +20,7 @@ import {
 import { levelBadge } from '@/lib/kode-akun'
 import { useLevelFilter } from '@/hooks/use-level-filter'
 import { LevelFilterControls } from '@/components/dashboard/level-filter-controls'
+import { usePeriodeFilter, PeriodeFilterControls } from '@/components/dashboard/periode-filter-controls'
 import { formatPct, formatRupiah, formatRupiah0 } from '@/lib/format'
 import type { OpdSelfDto, RealisasiAkunDto } from '@/types/budget'
 
@@ -62,12 +63,15 @@ export function OpdDashboardSection() {
 
   const opdId = data?.opd.id ?? null
   const { isVisible } = useLevelFilter()
+  const { periode } = usePeriodeFilter()
 
   // Rincian realisasi akun milik OPD ini (hasil import LRA)
   const akunQuery = useQuery({
-    queryKey: ['opd-realisasi-akun', opdId],
+    queryKey: ['opd-realisasi-akun', opdId, periode],
     queryFn: async (): Promise<RealisasiAkunDto[]> => {
-      const res = await fetch(`/api/realisasi/akun?opdId=${opdId}`)
+      const params = new URLSearchParams({ opdId: String(opdId) })
+      if (periode !== null) params.set('periode', String(periode))
+      const res = await fetch(`/api/realisasi/akun?${params}`)
       if (!res.ok) throw new Error('Gagal memuat rincian akun')
       return ((await res.json()) as { data: RealisasiAkunDto[] }).data
     },
@@ -300,6 +304,8 @@ export function OpdDashboardSection() {
           Kode rekening hasil import diklasifikasi per level: L1 Akun · L2 Kelompok · L3 Jenis ·
           L4 Obyek · L5 Rincian Obyek · L6 Sub Rincian Obyek.
         </p>
+
+        <PeriodeFilterControls className="mb-3" />
 
         <LevelFilterControls className="mb-4" />
 
