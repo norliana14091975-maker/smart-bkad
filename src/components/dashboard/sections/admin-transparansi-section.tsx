@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2 } from 'lucide-react'
+import { ExternalLink, Plus, Trash2 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { Button } from '@/components/ui/button'
 import {
@@ -172,8 +172,21 @@ export function AdminTransparansiSection() {
                   <TableRow key={doc.id}>
                     <TableCell className="text-center text-muted-foreground">{idx + 1}</TableCell>
                     <TableCell className="font-medium">{doc.title}</TableCell>
-                    <TableCell className="max-w-[200px] truncate text-xs text-muted-foreground">
-                      {doc.url}
+                    <TableCell className="max-w-[200px] truncate text-xs">
+                      {doc.url && doc.url !== '#' ? (
+                        <a
+                          href={doc.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-[#17408b] hover:underline"
+                          aria-label={`Buka URL dokumen ${doc.title} pada tab baru`}
+                        >
+                          <span className="truncate">{doc.url}</span>
+                          <ExternalLink className="h-3 w-3 shrink-0 opacity-60" aria-hidden="true" />
+                        </a>
+                      ) : (
+                        <span className="text-muted-foreground">— belum diisi —</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-right">
                       <Button

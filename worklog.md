@@ -425,3 +425,19 @@ Work Log:
 
 Stage Summary:
 - Kelola Ringkasan APBD Tahunan & Kelola Item Anggaran kini punya tombol "Hapus Semua" (konfirmasi + jumlah data) dan tombol "Sinkron dari LRA" (pratinjau sumber LRA → eksekusi transaksional); sinkronisasi mengambil anggaran LRA terimport (level jenis, agregat seluruh OPD pada periode terakhir) menjadi item anggaran + ringkasan APBD tahun berjalan — APBD murni & APBDP sama-sama berisi anggaran LRA setelah sinkron; dashboard publik langsung mengikuti data hasil sinkron
+
+---
+Task ID: 22
+Agent: Z.ai Code (main)
+Task: Class modal detail menjadi modal-fullscreen + perbaiki tombol link pada Transparansi
+
+Work Log:
+- globals.css: kelas baru .modal-fullscreen (CSS tanpa @layer agar menang atas utility Tailwind) — DialogContent shadcn dijadikan 100% viewport (width/max-width 100vw, height/max-height 100dvh dengan fallback 100vh, border-radius 0, tanpa border); posisi pusat bawaan (top 50% / left 50% / translate -50% -50%) dibiarkan karena elemen selebar-tinggi viewport yang dipusatkan jatuh tepat di 0,0; aturan pendamping .modal-fullscreen [data-slot="table-container"] { overflow: visible } agar <thead> sticky menempel ke kontainer scroll grup tabel (bukan wrapper overflow-x komponen Table)
+- Pembelajaran penting (debugging): deklarasi translate identitas (none / 0 0) DIBUANG oleh minifier Lightning CSS sehingga override translate tidak pernah sampai browser; solusi = tidak melawan translate sama sekali dan mengandalkan pemusatan bawaan; selain itu chunk CSS Turbopack STALE (restart server saja tidak cukup) — harus rm -rf .next lalu restart
+- skpd-detail-dialog.tsx ditulis ulang: DialogContent kini "modal-fullscreen flex flex-col gap-0 overflow-hidden p-0"; kepala TETAP (judul + deskripsi + filter periode & level, pr-14 agar tak tertutup tombol tutup) + isi dapat digulir (flex-1 overflow-y-auto nice-scrollbar); tabel per grup max-h-[60vh] dengan thead sticky top-0 z-10 bg-muted; state loading/error/kosong tetap utuh
+- transparansi-section.tsx (publik) — AKAR MASALAH: <a> memiliki onClick={(e) => e.preventDefault()} sehingga link sama sekali tidak berfungsi; DIPERBAIKI: preventDefault dihapus, target="_blank" + rel="noopener noreferrer" (dokumen terbuka di tab baru); URL valid → tombol link (ikon dokumen + judul + ikon ExternalLink, hover bg biru + underline, aria-label); URL kosong/'#'/'/' → teks non-klik dengan badge amber "BELUM TERSEDIA" (sebelumnya link '#' melompat ke atas halaman)
+- admin-transparansi-section.tsx: kolom URL kini link aktif (target _blank + ikon ExternalLink) bila terisi; '#' → "— belum diisi —"
+- Verifikasi browser: dialog rincian DINAS KESEHATAN exact fullscreen di desktop (rect 0,0 1280×577 = viewport) dan mobile 375×812 (exact:true); kepala tetap saat body digulir (headerTop 0); thead sticky saat menggulir grup BELANJA 223 baris (theadTop == groupTop); tombol tutup berfungsi; Transparansi APBD — 15 baris placeholder badge "BELUM TERSEDIA" + baris "Coba Link" (Google Drive) TERBUKA PADA TAB BARU saat diklik; tab Realisasi 15 baris placeholder; admin Dokumen Transparansi — URL Google Drive klik-able + "— belum diisi —" untuk kosong; 0 error console; dev.log bersih; lint bersih
+
+Stage Summary:
+- Dialog detail (RINCIAN per-SKPD) kini LAYAR PENUH memakai class modal-fullscreen yang reusable (cukup tambahkan pada DialogContent): kepala (judul+filter) tetap di atas, isi scroll dengan header tabel sticky per grup — terverifikasi exact fullscreen di desktop & mobile; tombol link Transparansi diperbaiki — dokumen dengan URL valid terbuka di tab baru, dokumen tanpa URL menampilkan badge "BELUM TERSEDIA" alih-alih link mati

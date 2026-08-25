@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { FileText } from 'lucide-react'
+import { ExternalLink, FileText } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
@@ -22,6 +23,12 @@ async function fetchDocs(type: DocType): Promise<TransparansiDocDto[]> {
   if (!res.ok) throw new Error('Gagal memuat dokumen')
   const json = (await res.json()) as { data: TransparansiDocDto[] }
   return json.data
+}
+
+/** URL valid = tidak kosong dan bukan placeholder '#'. */
+function hasRealUrl(url: string | undefined | null): boolean {
+  const u = (url ?? '').trim()
+  return u !== '' && u !== '#' && u !== '/'
 }
 
 export function TransparansiSection({ initialType = 'APBD' }: { initialType?: DocType }) {
@@ -85,21 +92,46 @@ export function TransparansiSection({ initialType = 'APBD' }: { initialType?: Do
                   </TableRow>
                 ))
               ) : (
-                data?.map((doc, idx) => (
-                  <TableRow key={doc.title} className="group">
-                    <TableCell className="text-center text-muted-foreground">{idx + 1}</TableCell>
-                    <TableCell>
-                      <a
-                        href={doc.url}
-                        onClick={(e) => e.preventDefault()}
-                        className="flex items-center gap-2 font-medium text-[#17408b] hover:underline"
-                      >
-                        <FileText className="h-4 w-4 shrink-0 opacity-70" aria-hidden="true" />
-                        {doc.title}
-                      </a>
-                    </TableCell>
-                  </TableRow>
-                ))
+                data?.map((doc, idx) => {
+                  const linked = hasRealUrl(doc.url)
+                  return (
+                    <TableRow key={doc.title} className="group">
+                      <TableCell className="text-center text-muted-foreground">{idx + 1}</TableCell>
+                      <TableCell>
+                        {linked ? (
+                          <a
+                            href={doc.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="-ml-2 inline-flex max-w-full items-center gap-2 rounded-md px-2 py-1.5 font-medium text-[#17408b] transition-colors hover:bg-[#17408b]/5 hover:underline focus-visible:ring-2 focus-visible:ring-[#17408b]/40 focus-visible:outline-none"
+                            aria-label={`Buka dokumen ${doc.title} pada tab baru`}
+                          >
+                            <FileText className="h-4 w-4 shrink-0 opacity-70" aria-hidden="true" />
+                            <span className="min-w-0 flex-1 truncate">{doc.title}</span>
+                            <ExternalLink
+                              className="h-3.5 w-3.5 shrink-0 opacity-50 transition-opacity group-hover:opacity-100"
+                              aria-hidden="true"
+                            />
+                          </a>
+                        ) : (
+                          <span
+                            className="-ml-2 inline-flex max-w-full items-center gap-2 px-2 py-1.5 font-medium text-muted-foreground"
+                            title="Dokumen belum tersedia — URL belum diisi"
+                          >
+                            <FileText className="h-4 w-4 shrink-0 opacity-50" aria-hidden="true" />
+                            <span className="min-w-0 flex-1 truncate">{doc.title}</span>
+                            <Badge
+                              variant="outline"
+                              className="ml-1 shrink-0 border-amber-300 bg-amber-50 text-[10px] font-semibold tracking-wide text-amber-700"
+                            >
+                              BELUM TERSEDIA
+                            </Badge>
+                          </span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })
               )}
             </TableBody>
           </Table>
